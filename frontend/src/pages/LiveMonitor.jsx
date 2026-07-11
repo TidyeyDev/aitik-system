@@ -16,7 +16,11 @@ function CameraFeed({ cam }) {
     const streamUrl = `${API_URL}/stream/${cam.id}/index.m3u8`;
 
     if (window.Hls && window.Hls.isSupported()) {
-      const hls = new window.Hls();
+      const hls = new window.Hls({
+        xhrSetup: (xhr) => {
+          xhr.setRequestHeader("ngrok-skip-browser-warning", "true");
+        },
+      });
       hls.loadSource(streamUrl);
       hls.attachMedia(videoRef.current);
       hls.on(window.Hls.Events.MANIFEST_PARSED, () => {
