@@ -1,6 +1,5 @@
-import { useEffect, useRef } from "react";
-
-const API_URL = "https://marina-silent-brought-identifying.trycloudflare.com";
+import { useEffect, useRef, useState } from "react";
+import { api } from "../api/client";
 
 const cameras = [
   { id: "cam1", label: "Camera 1 — North" },
@@ -9,11 +8,12 @@ const cameras = [
   { id: "cam4", label: "Camera 4 — West" },
 ];
 
-function CameraFeed({ cam }) {
+function CameraFeed({ cam, tunnelUrl }) {
   const videoRef = useRef(null);
 
   useEffect(() => {
-    const streamUrl = `${API_URL}/stream/${cam.id}/index.m3u8`;
+    if (!tunnelUrl) return;
+    const streamUrl = `${tunnelUrl}/stream/${cam.id}/index.m3u8`;
 
     if (window.Hls && window.Hls.isSupported()) {
       const hls = new window.Hls({
@@ -31,7 +31,7 @@ function CameraFeed({ cam }) {
       videoRef.current.src = streamUrl;
       videoRef.current.play();
     }
-  }, [cam.id]);
+  }, [cam.id, tunnelUrl]);
 
   return (
     <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
@@ -53,8 +53,8 @@ function CameraFeed({ cam }) {
         />
       </div>
       <div className="px-4 py-2 text-xs text-gray-400 flex gap-4">
-        <span>1280×720</span>
-        <span>30 FPS</span>
+        <span>640×480</span>
+        <span>10 FPS</span>
         <span>H.264/HLS</span>
       </div>
     </div>
@@ -62,6 +62,18 @@ function CameraFeed({ cam }) {
 }
 
 export default function LiveMonitor() {
+  const [tunnelUrl, setTunnelUrl] = useState(null);
+
+  useEffect(() => {
+    // Fetch current tunnel URL from backend
+    api
+      .get("/tunnel-url")
+      .then((res) => {
+        setTunnelUrl(res.data.url);
+      })
+      .catch(() => {});
+  }, []);
+
   return (
     <div className="max-w-7xl mx-auto">
       <div className="mb-8">
@@ -81,18 +93,27 @@ export default function LiveMonitor() {
             <span className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></span>
             <div>
               <div className="text-white text-sm font-medium">{cam.label}</div>
-              <div className="text-green-400 text-xs">Streaming</div>
+              <div className="text-green-400 text-xs">
+                {tunnelUrl ? "Streaming" : "Connecting..."}
+              </div>
             </div>
           </div>
         ))}
       </div>
 
       {/* Camera Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {cameras.map((cam) => (
-          <CameraFeed key={cam.id} cam={cam} />
-        ))}
-      </div>
+      {!tunnelUrl ? (
+        <div className="text-center py-20">
+          <div className="text-4xl mb-3">📡</div>
+          <div className="text-gray-400">Connecting to stream server...</div>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {cameras.map((cam) => (
+            <CameraFeed key={cam.id} cam={cam} tunnelUrl={tunnelUrl} />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
