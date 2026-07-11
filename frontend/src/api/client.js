@@ -1,17 +1,25 @@
 import axios from "axios";
 import { io } from "socket.io-client";
 
-const API_URL = "https://absurd-embattled-uncounted.ngrok-free.dev";
+// Fetch tunnel URL dynamically from backend
+const LOCAL_BACKEND =
+  "https://marina-silent-brought-identifying.trycloudflare.com";
 
 export const api = axios.create({
-  baseURL: API_URL,
-  headers: {
-    "ngrok-skip-browser-warning": "true",
-  },
+  baseURL: LOCAL_BACKEND,
 });
 
-export const socket = io(API_URL, {
+export const socket = io(LOCAL_BACKEND, {
   transports: ["websocket", "polling"],
 });
+
+export const getTunnelUrl = async () => {
+  try {
+    const res = await api.get("/tunnel-url");
+    return res.data.url;
+  } catch {
+    return LOCAL_BACKEND;
+  }
+};
 
 export default api;

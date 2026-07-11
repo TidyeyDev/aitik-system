@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 
-const API_URL = "https://absurd-embattled-uncounted.ngrok-free.dev";
+const API_URL = "https://marina-silent-brought-identifying.trycloudflare.com";
 
 const cameras = [
   { id: "cam1", label: "Camera 1 — North" },
