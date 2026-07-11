@@ -13,7 +13,7 @@ function CameraFeed({ cam, tunnelUrl }) {
 
   useEffect(() => {
     if (!tunnelUrl) return;
-    const streamUrl = `${tunnelUrl}/stream/${cam.id}/index.m3u8`;
+    const streamUrl = `${tunnelUrl}/hls/${cam.id}/index.m3u8`;
 
     if (window.Hls && window.Hls.isSupported()) {
       const hls = new window.Hls({
