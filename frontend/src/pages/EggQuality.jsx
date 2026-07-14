@@ -221,7 +221,7 @@ export default function EggQuality() {
       )}
 
       {/* Average Weight Cards */}
-      <div className="grid grid-cols-3 gap-4 mb-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
         {[
           { label: "Receptive", data: receptive, color: "#10b981" },
           { label: "Neutral", data: neutral, color: "#f59e0b" },
