@@ -115,11 +115,14 @@ function DuckStatusGrid({ ducks }) {
                 >
                   D{i + 1}
                 </div>
-                <div className="text-xs" style={{ color }}>
+                <div
+                  className="text-xs text-center leading-tight"
+                  style={{ color }}
+                >
                   {duck.behavior === "Non-receptive"
                     ? "Non-rec"
                     : duck.behavior === "Receptive"
-                      ? "Recept"
+                      ? "Receptive"
                       : duck.behavior === "Mating"
                         ? "Mating"
                         : "Neutral"}
@@ -230,7 +233,7 @@ export default function Dashboard() {
             Turentigue Farm, Morong, Rizal — Philippine Mallard Duck Monitoring
           </p>
         </div>
-        <div className="text-right">
+        <div className="text-right hidden sm:block">
           <div
             className="text-lg font-mono font-bold"
             style={{ color: "#10b981" }}
@@ -239,10 +242,10 @@ export default function Dashboard() {
           </div>
           <div className="text-xs mt-0.5" style={{ color: "#475569" }}>
             {new Date().toLocaleDateString("en-PH", {
-              weekday: "long",
-              year: "numeric",
-              month: "long",
+              weekday: "short",
+              month: "short",
               day: "numeric",
+              year: "numeric",
             })}
           </div>
         </div>
