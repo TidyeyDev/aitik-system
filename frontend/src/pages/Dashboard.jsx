@@ -85,7 +85,7 @@ function DuckStatusGrid({ ducks }) {
           ● Live
         </span>
       </div>
-      <div className="grid grid-cols-4 md:grid-cols-8 gap-4">
+      <div className="grid grid-cols-4 gap-3 md:grid-cols-8 md:gap-4">
         {ducks.map((duck, i) => {
           const color = BEHAVIOR_COLORS[duck.behavior];
           return (
