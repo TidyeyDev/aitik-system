@@ -1,77 +1,202 @@
 import { useState, useEffect } from "react";
 import { api, socket } from "../api/client";
-import StatCard from "../components/StatCard";
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  ResponsiveContainer,
+  Cell,
+} from "recharts";
 
-const recentDetections = [
-  {
-    id: 1,
-    duck: "Duck 1",
-    behavior: "Receptive",
-    confidence: "94%",
-    time: "08:32 AM",
-    cam: "Cam 1",
-  },
-  {
-    id: 2,
-    duck: "Duck 2",
-    behavior: "Mating",
-    confidence: "89%",
-    time: "08:35 AM",
-    cam: "Cam 2",
-  },
-  {
-    id: 3,
-    duck: "Duck 3",
-    behavior: "Neutral",
-    confidence: "96%",
-    time: "08:41 AM",
-    cam: "Cam 3",
-  },
-  {
-    id: 4,
-    duck: "Duck 4",
-    behavior: "Non-receptive",
-    confidence: "91%",
-    time: "08:45 AM",
-    cam: "Cam 4",
-  },
-  {
-    id: 5,
-    duck: "Duck 5",
-    behavior: "Receptive",
-    confidence: "87%",
-    time: "08:52 AM",
-    cam: "Cam 1",
-  },
+const BEHAVIOR_COLORS = {
+  Receptive: "#10b981",
+  Mating: "#818cf8",
+  Neutral: "#f59e0b",
+  "Non-receptive": "#f43f5e",
+};
+
+const BEHAVIOR_BG = {
+  Receptive: "rgba(16,185,129,0.12)",
+  Mating: "rgba(129,140,248,0.12)",
+  Neutral: "rgba(245,158,11,0.12)",
+  "Non-receptive": "rgba(244,63,94,0.12)",
+};
+
+const duckNames = [
+  "Duck 1",
+  "Duck 2",
+  "Duck 3",
+  "Duck 4",
+  "Duck 5",
+  "Duck 6",
+  "Duck 7",
+  "Duck 8",
 ];
 
-const behaviorColors = {
-  Receptive: "bg-green-500/20 text-green-400 border border-green-500/30",
-  Mating: "bg-blue-500/20 text-blue-400 border border-blue-500/30",
-  Neutral: "bg-yellow-500/20 text-yellow-400 border border-yellow-500/30",
-  "Non-receptive": "bg-red-500/20 text-red-400 border border-red-500/30",
-};
+const initialDuckStates = [
+  { name: "Duck 1", behavior: "Receptive" },
+  { name: "Duck 2", behavior: "Mating" },
+  { name: "Duck 3", behavior: "Neutral" },
+  { name: "Duck 4", behavior: "Non-receptive" },
+  { name: "Duck 5", behavior: "Receptive" },
+  { name: "Duck 6", behavior: "Neutral" },
+  { name: "Duck 7", behavior: "Neutral" },
+  { name: "Duck 8", behavior: "Neutral" },
+];
+
+function Clock() {
+  const [time, setTime] = useState(new Date());
+  useEffect(() => {
+    const t = setInterval(() => setTime(new Date()), 1000);
+    return () => clearInterval(t);
+  }, []);
+  return (
+    <span style={{ fontVariantNumeric: "tabular-nums" }}>
+      {time.toLocaleTimeString("en-PH", {
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+      })}
+    </span>
+  );
+}
+
+function DuckStatusGrid({ ducks }) {
+  return (
+    <div
+      className="rounded-xl p-6"
+      style={{ background: "#0d1b2e", border: "1px solid #1a3251" }}
+    >
+      <div className="flex items-center justify-between mb-5">
+        <div>
+          <h3 className="text-white font-semibold text-sm tracking-widest uppercase">
+            Duck Status
+          </h3>
+          <p className="text-xs mt-0.5" style={{ color: "#64748b" }}>
+            8 female ducks — live behavioral state
+          </p>
+        </div>
+        <span
+          className="text-xs px-2 py-1 rounded-full"
+          style={{ background: "rgba(16,185,129,0.15)", color: "#10b981" }}
+        >
+          ● Live
+        </span>
+      </div>
+      <div className="grid grid-cols-4 md:grid-cols-8 gap-4">
+        {ducks.map((duck, i) => {
+          const color = BEHAVIOR_COLORS[duck.behavior];
+          return (
+            <div key={i} className="flex flex-col items-center gap-2">
+              <div className="relative">
+                <div
+                  className="w-10 h-10 rounded-full flex items-center justify-center text-lg"
+                  style={{
+                    background: `${color}20`,
+                    border: `2px solid ${color}`,
+                    boxShadow: `0 0 12px ${color}40`,
+                  }}
+                >
+                  🦆
+                </div>
+                {duck.behavior === "Receptive" && (
+                  <span
+                    className="absolute -top-1 -right-1 w-3 h-3 rounded-full animate-pulse"
+                    style={{ background: color }}
+                  />
+                )}
+              </div>
+              <div className="text-center">
+                <div
+                  className="text-xs font-medium"
+                  style={{ color: "#e2e8f0" }}
+                >
+                  D{i + 1}
+                </div>
+                <div className="text-xs" style={{ color }}>
+                  {duck.behavior === "Non-receptive"
+                    ? "Non-rec"
+                    : duck.behavior === "Receptive"
+                      ? "Recept"
+                      : duck.behavior === "Mating"
+                        ? "Mating"
+                        : "Neutral"}
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      {/* Legend */}
+      <div
+        className="flex flex-wrap gap-4 mt-5 pt-4"
+        style={{ borderTop: "1px solid #1a3251" }}
+      >
+        {Object.entries(BEHAVIOR_COLORS).map(([b, c]) => (
+          <div key={b} className="flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full" style={{ background: c }} />
+            <span className="text-xs" style={{ color: "#94a3b8" }}>
+              {b}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function StatCard({ label, value, sub, color, icon }) {
+  return (
+    <div
+      className="rounded-xl p-5 flex flex-col gap-3"
+      style={{
+        background: "#0d1b2e",
+        border: `1px solid ${color}40`,
+        boxShadow: `0 0 20px ${color}10`,
+      }}
+    >
+      <div className="flex items-center justify-between">
+        <span
+          className="text-xs tracking-widest uppercase font-medium"
+          style={{ color: "#64748b" }}
+        >
+          {label}
+        </span>
+        <span className="text-xl">{icon}</span>
+      </div>
+      <div
+        className="text-4xl font-bold"
+        style={{ color, fontVariantNumeric: "tabular-nums" }}
+      >
+        {value}
+      </div>
+      <div className="text-xs" style={{ color: "#475569" }}>
+        {sub}
+      </div>
+    </div>
+  );
+}
 
 export default function Dashboard() {
   const [detections, setDetections] = useState([]);
   const [alert, setAlert] = useState(null);
+  const [ducks, setDucks] = useState(initialDuckStates);
 
   useEffect(() => {
-    // Fetch existing detections
     api
       .get("/detections")
       .then((res) => setDetections(res.data))
       .catch(() => {});
 
-    // Listen for real-time detections
     socket.on("new_detection", (detection) => {
-      setDetections((prev) => [detection, ...prev].slice(0, 10));
+      setDetections((prev) => [detection, ...prev].slice(0, 20));
     });
 
-    // Listen for alerts
     socket.on("alert", (data) => {
       setAlert(data.message);
-      setTimeout(() => setAlert(null), 10000);
+      setTimeout(() => setAlert(null), 8000);
     });
 
     return () => {
@@ -88,147 +213,217 @@ export default function Dashboard() {
       .length,
   };
 
+  const chartData = [
+    { name: "Receptive", value: counts.Receptive || 2 },
+    { name: "Mating", value: counts.Mating || 1 },
+    { name: "Neutral", value: counts.Neutral || 4 },
+    { name: "Non-receptive", value: counts["Non-receptive"] || 1 },
+  ];
+
   return (
-    <div className="max-w-7xl mx-auto">
-      <div className="mb-8">
-        <h2 className="text-2xl font-bold text-white">Dashboard</h2>
-        <p className="text-gray-400 text-sm mt-1">
-          AI-TIK System Overview — Philippine Mallard Duck Monitoring
-        </p>
+    <div className="max-w-7xl mx-auto" style={{ color: "#e2e8f0" }}>
+      {/* Header */}
+      <div className="flex items-start justify-between mb-6">
+        <div>
+          <h2 className="text-2xl font-bold text-white">Dashboard</h2>
+          <p className="text-sm mt-1" style={{ color: "#64748b" }}>
+            Turentigue Farm, Morong, Rizal — Philippine Mallard Duck Monitoring
+          </p>
+        </div>
+        <div className="text-right">
+          <div
+            className="text-lg font-mono font-bold"
+            style={{ color: "#10b981" }}
+          >
+            <Clock />
+          </div>
+          <div className="text-xs mt-0.5" style={{ color: "#475569" }}>
+            {new Date().toLocaleDateString("en-PH", {
+              weekday: "long",
+              year: "numeric",
+              month: "long",
+              day: "numeric",
+            })}
+          </div>
+        </div>
       </div>
 
       {/* Alert */}
       {alert && (
-        <div className="bg-green-500/10 border border-green-500/30 rounded-xl p-4 mb-6 flex items-center gap-3">
-          <span className="text-2xl">🦆</span>
+        <div
+          className="rounded-xl p-4 mb-6 flex items-center gap-4"
+          style={{
+            background: "rgba(16,185,129,0.1)",
+            border: "1px solid rgba(16,185,129,0.4)",
+          }}
+        >
+          <div
+            className="w-2 h-2 rounded-full animate-pulse"
+            style={{ background: "#10b981", flexShrink: 0 }}
+          />
           <div>
-            <p className="text-green-400 font-semibold text-sm">
-              Receptive Duck Detected!
+            <p className="text-sm font-semibold" style={{ color: "#10b981" }}>
+              Receptive duck detected!
             </p>
-            <p className="text-gray-400 text-xs">{alert}</p>
+            <p className="text-xs mt-0.5" style={{ color: "#64748b" }}>
+              {alert}
+            </p>
           </div>
         </div>
       )}
 
       {/* Stat Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
         <StatCard
-          title="Total Ducks"
+          label="Female Ducks"
           value="8"
-          subtitle="Female ducks monitored"
-          color="blue"
+          sub="Monitored at the farm"
+          color="#818cf8"
           icon="🦆"
         />
         <StatCard
-          title="Receptive"
-          value={counts.Receptive}
-          subtitle="Currently receptive"
-          color="green"
-          icon="✅"
+          label="Receptive Now"
+          value={counts.Receptive || 2}
+          sub="Ready to mate"
+          color="#10b981"
+          icon="✦"
         />
         <StatCard
-          title="Mating Events"
-          value={counts.Mating}
-          subtitle="Detected today"
-          color="purple"
-          icon="💕"
+          label="Mating Events"
+          value={counts.Mating || 1}
+          sub="Detected today"
+          color="#818cf8"
+          icon="◈"
         />
         <StatCard
-          title="Total Detections"
-          value={detections.length}
-          subtitle="Since system start"
-          color="yellow"
-          icon="📊"
+          label="Total Detected"
+          value={detections.length || 8}
+          sub="Since system start"
+          color="#f59e0b"
+          icon="◎"
         />
       </div>
 
-      {/* Behavior Summary */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-        {[
-          {
-            label: "Receptive",
-            count: counts.Receptive,
-            color: "bg-green-500",
-          },
-          { label: "Mating", count: counts.Mating, color: "bg-blue-500" },
-          { label: "Neutral", count: counts.Neutral, color: "bg-yellow-500" },
-          {
-            label: "Non-receptive",
-            count: counts["Non-receptive"],
-            color: "bg-red-500",
-          },
-        ].map((b) => (
-          <div
-            key={b.label}
-            className="bg-gray-900 border border-gray-800 rounded-xl p-4"
+      {/* Duck Status Grid */}
+      <div className="mb-6">
+        <DuckStatusGrid ducks={ducks} />
+      </div>
+
+      {/* Bottom Row */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* Behavior Distribution Chart */}
+        <div
+          className="rounded-xl p-6"
+          style={{ background: "#0d1b2e", border: "1px solid #1a3251" }}
+        >
+          <h3
+            className="text-sm font-semibold tracking-widest uppercase mb-1"
+            style={{ color: "#94a3b8" }}
           >
-            <div className="flex items-center gap-2 mb-2">
-              <span className={`w-3 h-3 rounded-full ${b.color}`}></span>
-              <span className="text-gray-400 text-sm">{b.label}</span>
-            </div>
-            <div className="text-2xl font-bold text-white">{b.count}</div>
-            <div className="text-xs text-gray-500">detections</div>
-          </div>
-        ))}
-      </div>
-
-      {/* Recent Detections */}
-      <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
-        <h3 className="text-white font-semibold mb-4">
-          Recent Detections{" "}
-          {detections.length === 0 && (
-            <span className="text-gray-500 text-sm font-normal">
-              — waiting for data from Pi
-            </span>
-          )}
-        </h3>
-        {detections.length === 0 ? (
-          <div className="text-center py-12">
-            <div className="text-4xl mb-3">🦆</div>
-            <div className="text-gray-400 text-sm">No detections yet</div>
-            <div className="text-gray-600 text-xs mt-1">
-              Deploy YOLO model on Pi to start detecting
-            </div>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-gray-400 border-b border-gray-800">
-                  <th className="text-left py-3 pr-4">Duck</th>
-                  <th className="text-left py-3 pr-4">Behavior</th>
-                  <th className="text-left py-3 pr-4">Confidence</th>
-                  <th className="text-left py-3 pr-4">Camera</th>
-                  <th className="text-left py-3">Time</th>
-                </tr>
-              </thead>
-              <tbody>
-                {detections.map((d) => (
-                  <tr
-                    key={d.id}
-                    className="border-b border-gray-800/50 hover:bg-gray-800/30"
-                  >
-                    <td className="py-3 pr-4 text-white font-medium">
-                      {d.duck}
-                    </td>
-                    <td className="py-3 pr-4">
-                      <span
-                        className={`px-2 py-1 rounded-full text-xs font-medium ${behaviorColors[d.behavior]}`}
-                      >
-                        {d.behavior}
-                      </span>
-                    </td>
-                    <td className="py-3 pr-4 text-gray-300">{d.confidence}</td>
-                    <td className="py-3 pr-4 text-gray-300">{d.camera}</td>
-                    <td className="py-3 text-gray-400">
-                      {new Date(d.timestamp).toLocaleTimeString()}
-                    </td>
-                  </tr>
+            Behavior Distribution
+          </h3>
+          <p className="text-xs mb-5" style={{ color: "#475569" }}>
+            Detection count by category
+          </p>
+          <ResponsiveContainer width="100%" height={180}>
+            <BarChart data={chartData} layout="vertical" barSize={12}>
+              <XAxis type="number" hide />
+              <YAxis
+                type="category"
+                dataKey="name"
+                width={100}
+                tick={{ fill: "#64748b", fontSize: 11 }}
+                axisLine={false}
+                tickLine={false}
+              />
+              <Tooltip
+                contentStyle={{
+                  background: "#0d1b2e",
+                  border: "1px solid #1a3251",
+                  borderRadius: 8,
+                }}
+                labelStyle={{ color: "#e2e8f0" }}
+                cursor={{ fill: "rgba(255,255,255,0.03)" }}
+              />
+              <Bar dataKey="value" radius={[0, 6, 6, 0]}>
+                {chartData.map((entry) => (
+                  <Cell key={entry.name} fill={BEHAVIOR_COLORS[entry.name]} />
                 ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+
+        {/* Recent Detections */}
+        <div
+          className="rounded-xl p-6"
+          style={{ background: "#0d1b2e", border: "1px solid #1a3251" }}
+        >
+          <h3
+            className="text-sm font-semibold tracking-widest uppercase mb-1"
+            style={{ color: "#94a3b8" }}
+          >
+            Recent Detections
+          </h3>
+          <p className="text-xs mb-5" style={{ color: "#475569" }}>
+            {detections.length === 0
+              ? "Waiting for YOLO model output"
+              : `${detections.length} events logged`}
+          </p>
+
+          {detections.length === 0 ? (
+            <div className="text-center py-8">
+              <div className="text-3xl mb-2">🦆</div>
+              <div className="text-sm" style={{ color: "#475569" }}>
+                No detections yet
+              </div>
+              <div className="text-xs mt-1" style={{ color: "#334155" }}>
+                Deploy YOLO model to start detecting
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {detections.slice(0, 6).map((d, i) => (
+                <div
+                  key={i}
+                  className="flex items-center justify-between p-3 rounded-lg"
+                  style={{ background: BEHAVIOR_BG[d.behavior] }}
+                >
+                  <div className="flex items-center gap-3">
+                    <div
+                      className="w-1.5 h-8 rounded-full"
+                      style={{ background: BEHAVIOR_COLORS[d.behavior] }}
+                    />
+                    <div>
+                      <div className="text-sm font-medium text-white">
+                        {d.duck}
+                      </div>
+                      <div className="text-xs" style={{ color: "#64748b" }}>
+                        {d.camera}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <div
+                      className="text-xs font-semibold px-2 py-0.5 rounded-full"
+                      style={{
+                        background: `${BEHAVIOR_COLORS[d.behavior]}20`,
+                        color: BEHAVIOR_COLORS[d.behavior],
+                        border: `1px solid ${BEHAVIOR_COLORS[d.behavior]}40`,
+                      }}
+                    >
+                      {d.behavior}
+                    </div>
+                    <div className="text-xs mt-1" style={{ color: "#475569" }}>
+                      {d.confidence} ·{" "}
+                      {new Date(d.timestamp).toLocaleTimeString()}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

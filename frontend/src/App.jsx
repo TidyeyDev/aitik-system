@@ -8,7 +8,10 @@ import EggQuality from "./pages/EggQuality";
 export default function App() {
   return (
     <BrowserRouter>
-      <div className="min-h-screen bg-gray-950 text-white">
+      <div
+        className="min-h-screen text-white"
+        style={{ background: "#050d1a" }}
+      >
         <Navbar />
         <main className="p-6">
           <Routes>
