@@ -28,7 +28,11 @@ function CameraFeed({ cam, tunnelUrl }) {
         videoRef.current.play();
         setStatus("live");
       });
-      hls.on(window.Hls.Events.ERROR, () => setStatus("offline"));
+      hls.on(window.Hls.Events.ERROR, (event, data) => {
+        if (data.fatal) {
+          setStatus("offline");
+        }
+      });
       return () => hls.destroy();
     } else if (videoRef.current.canPlayType("application/vnd.apple.mpegurl")) {
       videoRef.current.src = streamUrl;
