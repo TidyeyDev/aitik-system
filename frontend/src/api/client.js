@@ -2,7 +2,8 @@ import axios from "axios";
 import { io } from "socket.io-client";
 
 // Fetch tunnel URL dynamically from backend
-const LOCAL_BACKEND = "https://cats-mazda-observe-warranties.trycloudflare.com";
+const LOCAL_BACKEND =
+  "https://duke-acre-reference-improvement.trycloudflare.com";
 
 export const api = axios.create({
   baseURL: LOCAL_BACKEND,
