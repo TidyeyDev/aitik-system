@@ -1,15 +1,13 @@
 import axios from "axios";
 import { io } from "socket.io-client";
 
-// Fetch tunnel URL dynamically from backend
-const LOCAL_BACKEND =
-  "https://duke-acre-reference-improvement.trycloudflare.com";
+const BACKEND_URL = "https://aitik-backend.onrender.com";
 
 export const api = axios.create({
-  baseURL: LOCAL_BACKEND,
+  baseURL: BACKEND_URL,
 });
 
-export const socket = io(LOCAL_BACKEND, {
+export const socket = io(BACKEND_URL, {
   transports: ["websocket", "polling"],
 });
 
@@ -18,7 +16,7 @@ export const getTunnelUrl = async () => {
     const res = await api.get("/tunnel-url");
     return res.data.url;
   } catch {
-    return LOCAL_BACKEND;
+    return null;
   }
 };
 
