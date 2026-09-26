@@ -7,12 +7,19 @@ const BEHAVIOR_COLORS = {
   "Non-receptive": "#f43f5e",
 };
 
-const sizeCategory = (w) => {
-  if (w >= 70) return { label: "Jumbo", color: "#818cf8" };
-  if (w >= 65) return { label: "Large", color: "#10b981" };
-  if (w >= 60) return { label: "Medium", color: "#f59e0b" };
-  return { label: "Small", color: "#f43f5e" };
+// Size category is calculated by the backend (server.js eggSizeCategory);
+// the page only maps the stored label to a color.
+const SIZE_COLORS = {
+  Jumbo: "#818cf8",
+  Large: "#10b981",
+  Medium: "#f59e0b",
+  Small: "#f43f5e",
 };
+
+const sizeOf = (record) => ({
+  label: record.sizeCategory ?? "—",
+  color: SIZE_COLORS[record.sizeCategory] ?? "#64748b",
+});
 
 export default function EggQuality() {
   const [data, setData] = useState([]);
@@ -26,6 +33,9 @@ export default function EggQuality() {
   const [loadState, setLoadState] = useState("loading");
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState(null);
+  const [deletingId, setDeletingId] = useState(null);
+  const [deleteError, setDeleteError] = useState(null);
 
   useEffect(() => {
     api
@@ -79,6 +89,26 @@ export default function EggQuality() {
         ),
       )
       .finally(() => setSaving(false));
+  };
+
+  const handleDelete = (id) => {
+    setDeletingId(id);
+    setDeleteError(null);
+    api
+      .delete(`/eggs/${id}`)
+      .then(() => {
+        setData((prev) => prev.filter((r) => r.id !== id));
+        setConfirmDeleteId(null);
+      })
+      .catch((err) =>
+        setDeleteError({
+          id,
+          message: err.response?.data?.error
+            ? `Not deleted: ${err.response.data.error}`
+            : "Not deleted: couldn't reach the backend.",
+        }),
+      )
+      .finally(() => setDeletingId(null));
   };
 
   const maxWeight = Math.max(...data.map((d) => d.weight));
@@ -282,12 +312,12 @@ export default function EggQuality() {
           </div>
         ) : (
           <div className="space-y-3">
-            {data.map((d, i) => {
+            {data.map((d) => {
               const color = BEHAVIOR_COLORS[d.behavior];
-              const size = sizeCategory(d.weight);
+              const size = sizeOf(d);
               const pct = (d.weight / maxWeight) * 100;
               return (
-                <div key={i} className="flex items-center gap-4">
+                <div key={d.id} className="flex items-center gap-4">
                   <div
                     className="w-16 text-xs text-right"
                     style={{ color: "#94a3b8" }}
@@ -351,24 +381,29 @@ export default function EggQuality() {
           <table className="w-full text-sm">
             <thead>
               <tr style={{ borderBottom: "1px solid #1a3251" }}>
-                {["Duck", "Behavior", "Weight", "Size Category", "Date"].map(
-                  (h) => (
-                    <th
-                      key={h}
-                      className="text-left px-6 py-3 text-xs tracking-widest uppercase"
-                      style={{ color: "#475569" }}
-                    >
-                      {h}
-                    </th>
-                  ),
-                )}
+                {[
+                  "Duck",
+                  "Behavior",
+                  "Weight",
+                  "Size Category",
+                  "Date",
+                  "",
+                ].map((h) => (
+                  <th
+                    key={h}
+                    className="text-left px-6 py-3 text-xs tracking-widest uppercase"
+                    style={{ color: "#475569" }}
+                  >
+                    {h}
+                  </th>
+                ))}
               </tr>
             </thead>
             <tbody>
               {data.length === 0 && (
                 <tr>
                   <td
-                    colSpan={5}
+                    colSpan={6}
                     className="px-6 py-10 text-center text-sm"
                     style={{ color: "#475569" }}
                   >
@@ -376,12 +411,12 @@ export default function EggQuality() {
                   </td>
                 </tr>
               )}
-              {data.map((d, i) => {
+              {data.map((d) => {
                 const color = BEHAVIOR_COLORS[d.behavior];
-                const size = sizeCategory(d.weight);
+                const size = sizeOf(d);
                 return (
                   <tr
-                    key={i}
+                    key={d.id}
                     style={{ borderBottom: "1px solid #0d1b2e" }}
                     onMouseEnter={(e) =>
                       (e.currentTarget.style.background = "#111827")
@@ -416,6 +451,61 @@ export default function EggQuality() {
                     </td>
                     <td className="px-6 py-4" style={{ color: "#475569" }}>
                       {d.date}
+                    </td>
+                    <td className="px-6 py-4 text-right whitespace-nowrap">
+                      {confirmDeleteId === d.id ? (
+                        <div className="flex items-center justify-end gap-2">
+                          <span
+                            className="text-xs"
+                            style={{ color: "#94a3b8" }}
+                          >
+                            Delete this record?
+                          </span>
+                          <button
+                            onClick={() => handleDelete(d.id)}
+                            disabled={deletingId === d.id}
+                            className="px-2 py-1 rounded text-xs font-medium"
+                            style={{ background: "#f43f5e", color: "#fff" }}
+                          >
+                            {deletingId === d.id ? "Deleting…" : "Delete"}
+                          </button>
+                          <button
+                            onClick={() => {
+                              setConfirmDeleteId(null);
+                              setDeleteError(null);
+                            }}
+                            disabled={deletingId === d.id}
+                            className="px-2 py-1 rounded text-xs font-medium"
+                            style={{ background: "#1a3251", color: "#94a3b8" }}
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => {
+                            setConfirmDeleteId(d.id);
+                            setDeleteError(null);
+                          }}
+                          aria-label={`Delete record for ${d.duck} on ${d.date}`}
+                          title="Delete record"
+                          className="px-2 py-1 rounded text-xs"
+                          style={{
+                            color: "#64748b",
+                            border: "1px solid #1a3251",
+                          }}
+                        >
+                          🗑
+                        </button>
+                      )}
+                      {deleteError?.id === d.id && (
+                        <div
+                          className="text-xs mt-1"
+                          style={{ color: "#f43f5e" }}
+                        >
+                          {deleteError.message}
+                        </div>
+                      )}
                     </td>
                   </tr>
                 );
