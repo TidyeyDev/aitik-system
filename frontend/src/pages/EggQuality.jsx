@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { api } from "../api/client";
 
 const BEHAVIOR_COLORS = {
   Receptive: "#10b981",
@@ -13,67 +14,8 @@ const sizeCategory = (w) => {
   return { label: "Small", color: "#f43f5e" };
 };
 
-const initialData = [
-  {
-    id: 1,
-    duck: "Duck 1",
-    behavior: "Receptive",
-    weight: 68,
-    date: "2026-07-14",
-  },
-  {
-    id: 2,
-    duck: "Duck 2",
-    behavior: "Non-receptive",
-    weight: 61,
-    date: "2026-07-14",
-  },
-  {
-    id: 3,
-    duck: "Duck 3",
-    behavior: "Neutral",
-    weight: 64,
-    date: "2026-07-14",
-  },
-  {
-    id: 4,
-    duck: "Duck 4",
-    behavior: "Receptive",
-    weight: 70,
-    date: "2026-07-14",
-  },
-  {
-    id: 5,
-    duck: "Duck 5",
-    behavior: "Non-receptive",
-    weight: 59,
-    date: "2026-07-14",
-  },
-  {
-    id: 6,
-    duck: "Duck 6",
-    behavior: "Neutral",
-    weight: 63,
-    date: "2026-07-14",
-  },
-  {
-    id: 7,
-    duck: "Duck 7",
-    behavior: "Receptive",
-    weight: 67,
-    date: "2026-07-14",
-  },
-  {
-    id: 8,
-    duck: "Duck 8",
-    behavior: "Non-receptive",
-    weight: 60,
-    date: "2026-07-14",
-  },
-];
-
 export default function EggQuality() {
-  const [data, setData] = useState(initialData);
+  const [data, setData] = useState([]);
   const [form, setForm] = useState({
     duck: "",
     behavior: "Receptive",
@@ -81,6 +23,26 @@ export default function EggQuality() {
     date: "",
   });
   const [showForm, setShowForm] = useState(false);
+  const [loadState, setLoadState] = useState("loading");
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState(null);
+
+  useEffect(() => {
+    api
+      .get("/eggs")
+      .then((res) => {
+        setData(res.data);
+        setLoadState("ready");
+      })
+      .catch(() => setLoadState("error"));
+  }, []);
+
+  const emptyMessage =
+    loadState === "loading"
+      ? "Loading records…"
+      : loadState === "error"
+        ? "Couldn't load records from the backend"
+        : "No records yet";
 
   const receptive = data.filter((d) => d.behavior === "Receptive");
   const nonReceptive = data.filter((d) => d.behavior === "Non-receptive");
@@ -92,13 +54,31 @@ export default function EggQuality() {
       : "—";
 
   const handleAdd = () => {
-    if (!form.duck || !form.weight || !form.date) return;
-    setData([
-      ...data,
-      { ...form, id: data.length + 1, weight: parseFloat(form.weight) },
-    ]);
-    setForm({ duck: "", behavior: "Receptive", weight: "", date: "" });
-    setShowForm(false);
+    if (!form.duck.trim() || !form.weight || !form.date) {
+      setSaveError("Fill in duck, weight and date.");
+      return;
+    }
+    setSaving(true);
+    setSaveError(null);
+    api
+      .post("/eggs", { ...form, weight: parseFloat(form.weight) })
+      .then((res) => {
+        setData((prev) =>
+          [...prev, res.data.record].sort((a, b) =>
+            a.date.localeCompare(b.date),
+          ),
+        );
+        setForm({ duck: "", behavior: "Receptive", weight: "", date: "" });
+        setShowForm(false);
+      })
+      .catch((err) =>
+        setSaveError(
+          err.response?.data?.error
+            ? `Not saved: ${err.response.data.error}`
+            : "Not saved: couldn't reach the backend.",
+        ),
+      )
+      .finally(() => setSaving(false));
   };
 
   const maxWeight = Math.max(...data.map((d) => d.weight));
@@ -204,10 +184,11 @@ export default function EggQuality() {
           <div className="flex gap-3 mt-4">
             <button
               onClick={handleAdd}
+              disabled={saving}
               className="px-5 py-2 rounded-lg text-sm font-medium"
               style={{ background: "#10b981", color: "#fff" }}
             >
-              Save Record
+              {saving ? "Saving…" : "Save Record"}
             </button>
             <button
               onClick={() => setShowForm(false)}
@@ -217,6 +198,11 @@ export default function EggQuality() {
               Cancel
             </button>
           </div>
+          {saveError && (
+            <p className="text-xs mt-3" style={{ color: "#f43f5e" }}>
+              {saveError}
+            </p>
+          )}
         </div>
       )}
 
@@ -245,7 +231,7 @@ export default function EggQuality() {
               </span>
             </div>
             <div className="text-4xl font-bold mb-1" style={{ color }}>
-              {avg(d)}g
+              {d.length ? `${avg(d)}g` : "—"}
             </div>
             <div className="text-xs" style={{ color: "#475569" }}>
               avg weight · {d.length} eggs
@@ -259,7 +245,9 @@ export default function EggQuality() {
                 className="h-1 rounded-full"
                 style={{
                   background: color,
-                  width: `${(parseFloat(avg(d)) / 75) * 100}%`,
+                  width: d.length
+                    ? `${Math.min((parseFloat(avg(d)) / 75) * 100, 100)}%`
+                    : "0%",
                 }}
               />
             </div>
@@ -281,53 +269,66 @@ export default function EggQuality() {
         <p className="text-xs mb-5" style={{ color: "#475569" }}>
           Visual comparison — PNS/BAFS 321:2021 size categories
         </p>
-        <div className="space-y-3">
-          {data.map((d, i) => {
-            const color = BEHAVIOR_COLORS[d.behavior];
-            const size = sizeCategory(d.weight);
-            const pct = (d.weight / maxWeight) * 100;
-            return (
-              <div key={i} className="flex items-center gap-4">
-                <div
-                  className="w-16 text-xs text-right"
-                  style={{ color: "#94a3b8" }}
-                >
-                  {d.duck}
-                </div>
-                <div
-                  className="flex-1 h-6 rounded-lg overflow-hidden"
-                  style={{ background: "#111827" }}
-                >
+        {data.length === 0 ? (
+          <div className="text-center py-8">
+            <div className="text-sm" style={{ color: "#475569" }}>
+              {emptyMessage}
+            </div>
+            {loadState === "ready" && (
+              <div className="text-xs mt-1" style={{ color: "#334155" }}>
+                Use "+ Record Egg" to add egg weight data
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {data.map((d, i) => {
+              const color = BEHAVIOR_COLORS[d.behavior];
+              const size = sizeCategory(d.weight);
+              const pct = (d.weight / maxWeight) * 100;
+              return (
+                <div key={i} className="flex items-center gap-4">
                   <div
-                    className="h-6 rounded-lg flex items-center px-2 transition-all"
+                    className="w-16 text-xs text-right"
+                    style={{ color: "#94a3b8" }}
+                  >
+                    {d.duck}
+                  </div>
+                  <div
+                    className="flex-1 h-6 rounded-lg overflow-hidden"
+                    style={{ background: "#111827" }}
+                  >
+                    <div
+                      className="h-6 rounded-lg flex items-center px-2 transition-all"
+                      style={{
+                        width: `${pct}%`,
+                        background: `${color}30`,
+                        border: `1px solid ${color}50`,
+                      }}
+                    >
+                      <span className="text-xs font-bold" style={{ color }}>
+                        {d.weight}g
+                      </span>
+                    </div>
+                  </div>
+                  <div className="w-16 text-xs" style={{ color: size.color }}>
+                    {size.label}
+                  </div>
+                  <div
+                    className="w-20 text-xs text-center px-2 py-0.5 rounded-full"
                     style={{
-                      width: `${pct}%`,
-                      background: `${color}30`,
-                      border: `1px solid ${color}50`,
+                      background: `${color}15`,
+                      color,
+                      border: `1px solid ${color}30`,
                     }}
                   >
-                    <span className="text-xs font-bold" style={{ color }}>
-                      {d.weight}g
-                    </span>
+                    {d.behavior === "Non-receptive" ? "Non-rec" : d.behavior}
                   </div>
                 </div>
-                <div className="w-16 text-xs" style={{ color: size.color }}>
-                  {size.label}
-                </div>
-                <div
-                  className="w-20 text-xs text-center px-2 py-0.5 rounded-full"
-                  style={{
-                    background: `${color}15`,
-                    color,
-                    border: `1px solid ${color}30`,
-                  }}
-                >
-                  {d.behavior === "Non-receptive" ? "Non-rec" : d.behavior}
-                </div>
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* Table */}
@@ -364,6 +365,17 @@ export default function EggQuality() {
               </tr>
             </thead>
             <tbody>
+              {data.length === 0 && (
+                <tr>
+                  <td
+                    colSpan={5}
+                    className="px-6 py-10 text-center text-sm"
+                    style={{ color: "#475569" }}
+                  >
+                    {emptyMessage}
+                  </td>
+                </tr>
+              )}
               {data.map((d, i) => {
                 const color = BEHAVIOR_COLORS[d.behavior];
                 const size = sizeCategory(d.weight);
