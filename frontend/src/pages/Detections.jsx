@@ -10,82 +10,15 @@ const BEHAVIOR_COLORS = {
 
 const behaviors = ["All", "Receptive", "Mating", "Neutral", "Non-receptive"];
 
-const sampleDetections = [
-  {
-    id: 1,
-    duck: "Duck 1",
-    behavior: "Receptive",
-    confidence: "94%",
-    camera: "Cam 1",
-    timestamp: new Date().toISOString(),
-  },
-  {
-    id: 2,
-    duck: "Duck 2",
-    behavior: "Mating",
-    confidence: "89%",
-    camera: "Cam 2",
-    timestamp: new Date().toISOString(),
-  },
-  {
-    id: 3,
-    duck: "Duck 3",
-    behavior: "Neutral",
-    confidence: "96%",
-    camera: "Cam 3",
-    timestamp: new Date().toISOString(),
-  },
-  {
-    id: 4,
-    duck: "Duck 4",
-    behavior: "Non-receptive",
-    confidence: "91%",
-    camera: "Cam 4",
-    timestamp: new Date().toISOString(),
-  },
-  {
-    id: 5,
-    duck: "Duck 5",
-    behavior: "Receptive",
-    confidence: "87%",
-    camera: "Cam 1",
-    timestamp: new Date().toISOString(),
-  },
-  {
-    id: 6,
-    duck: "Duck 6",
-    behavior: "Neutral",
-    confidence: "93%",
-    camera: "Cam 2",
-    timestamp: new Date().toISOString(),
-  },
-  {
-    id: 7,
-    duck: "Duck 7",
-    behavior: "Non-receptive",
-    confidence: "88%",
-    camera: "Cam 3",
-    timestamp: new Date().toISOString(),
-  },
-  {
-    id: 8,
-    duck: "Duck 8",
-    behavior: "Mating",
-    confidence: "95%",
-    camera: "Cam 4",
-    timestamp: new Date().toISOString(),
-  },
-];
-
 export default function Detections() {
   const [filter, setFilter] = useState("All");
-  const [detections, setDetections] = useState(sampleDetections);
+  const [detections, setDetections] = useState([]);
 
   useEffect(() => {
     api
       .get("/detections")
       .then((res) => {
-        if (res.data.length > 0) setDetections(res.data);
+        setDetections(res.data);
       })
       .catch(() => {});
 
@@ -93,7 +26,9 @@ export default function Detections() {
       setDetections((prev) => [detection, ...prev].slice(0, 50));
     });
 
-    return () => socket.off("new_detection");
+    return () => {
+      socket.off("new_detection");
+    };
   }, []);
 
   const filtered =
@@ -115,7 +50,8 @@ export default function Detections() {
       <div className="mb-6">
         <h2 className="text-2xl font-bold text-white">Detections</h2>
         <p className="text-sm mt-1" style={{ color: "#64748b" }}>
-          Behavioral detection log — Objective 2
+          Behavioral detection log — Objective 2. The model classifies behavior
+          only; each detection is saved with a snapshot.
         </p>
       </div>
 
@@ -218,7 +154,13 @@ export default function Detections() {
           <table className="w-full text-sm">
             <thead>
               <tr style={{ borderBottom: "1px solid #1a3251" }}>
-                {["Duck", "Behavior", "Confidence", "Camera", "Time"].map(
+                {[
+                  "Snapshot",
+                  "Behavior",
+                  "Confidence",
+                  "Camera",
+                  "Time",
+                ].map(
                   (h) => (
                     <th
                       key={h}
@@ -232,6 +174,17 @@ export default function Detections() {
               </tr>
             </thead>
             <tbody>
+              {filtered.length === 0 && (
+                <tr>
+                  <td
+                    colSpan={5}
+                    className="px-6 py-10 text-center text-sm"
+                    style={{ color: "#475569" }}
+                  >
+                    No detections yet — awaiting YOLO model deployment
+                  </td>
+                </tr>
+              )}
               {filtered.map((d, i) => (
                 <tr
                   key={i}
@@ -243,7 +196,21 @@ export default function Detections() {
                     (e.currentTarget.style.background = "transparent")
                   }
                 >
-                  <td className="px-6 py-4 font-medium text-white">{d.duck}</td>
+                  <td className="px-6 py-4">
+                    {d.snapshot ? (
+                      <a href={d.snapshot} target="_blank" rel="noreferrer">
+                        <img
+                          src={d.snapshot}
+                          alt={`${d.behavior} snapshot`}
+                          className="w-20 h-12 object-cover rounded"
+                        />
+                      </a>
+                    ) : (
+                      <span className="text-xs" style={{ color: "#475569" }}>
+                        None
+                      </span>
+                    )}
+                  </td>
                   <td className="px-6 py-4">
                     <span
                       className="px-2 py-1 rounded-full text-xs font-semibold"
@@ -263,7 +230,7 @@ export default function Detections() {
                     {d.camera}
                   </td>
                   <td className="px-6 py-4" style={{ color: "#475569" }}>
-                    {new Date(d.timestamp).toLocaleTimeString()}
+                    {new Date(d.timestamp).toLocaleString()}
                   </td>
                 </tr>
               ))}

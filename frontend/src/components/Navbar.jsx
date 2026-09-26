@@ -1,5 +1,6 @@
 import { Link, useLocation } from "react-router-dom";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { socket } from "../api/client";
 
 const links = [
   { path: "/", label: "Dashboard" },
@@ -11,6 +12,23 @@ const links = [
 export default function Navbar() {
   const location = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [connected, setConnected] = useState(socket.connected);
+
+  useEffect(() => {
+    const onConnect = () => setConnected(true);
+    const onDisconnect = () => setConnected(false);
+    socket.on("connect", onConnect);
+    socket.on("disconnect", onDisconnect);
+    return () => {
+      socket.off("connect", onConnect);
+      socket.off("disconnect", onDisconnect);
+    };
+  }, []);
+
+  const statusDot = connected
+    ? "w-2 h-2 bg-green-400 rounded-full animate-pulse"
+    : "w-2 h-2 bg-red-400 rounded-full";
+  const statusLabel = connected ? "Backend Connected" : "Backend Offline";
 
   return (
     <nav style={{ background: "#0d1b2e", borderBottom: "1px solid #1a3251" }}>
@@ -49,9 +67,9 @@ export default function Navbar() {
         {/* Right side */}
         <div className="flex items-center gap-3">
           <div className="hidden md:flex items-center gap-2">
-            <span className="w-2 h-2 bg-green-400 rounded-full animate-pulse" />
+            <span className={statusDot} />
             <span className="text-xs" style={{ color: "#64748b" }}>
-              System Online
+              {statusLabel}
             </span>
           </div>
 
@@ -95,9 +113,9 @@ export default function Navbar() {
               </Link>
             ))}
             <div className="flex items-center gap-2 px-4 py-3">
-              <span className="w-2 h-2 bg-green-400 rounded-full animate-pulse" />
+              <span className={statusDot} />
               <span className="text-xs" style={{ color: "#64748b" }}>
-                System Online
+                {statusLabel}
               </span>
             </div>
           </div>
