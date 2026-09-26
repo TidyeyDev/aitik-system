@@ -2,6 +2,7 @@ const express = require("express");
 const http = require("http");
 const { Server } = require("socket.io");
 const cors = require("cors");
+const { MongoClient } = require("mongodb");
 
 const app = express();
 const server = http.createServer(app);
@@ -12,13 +13,87 @@ const io = new Server(server, {
 app.use(cors());
 app.use(express.json());
 
+// Latest detections, newest first. Mirrors MongoDB when connected,
+// otherwise it is the only copy and is lost on restart.
 let detections = [];
 let tunnelUrl = null;
+
+// Set by initStorage() when MONGODB_URI is configured and reachable
+let detectionsCol = null;
+let settingsCol = null;
+
+// Only report what the backend actually knows; null means "not reported yet"
 let systemStatus = {
-  cameras: 4,
-  online: true,
-  lastSeen: new Date().toISOString(),
+  cameras: null,
+  online: false,
+  lastSeen: null,
+  modelDeployed: false,
+  lastDetectionAt: null,
+  storage: "memory",
 };
+
+function toDetection(doc) {
+  const { _id, ...rest } = doc;
+  return { id: _id.toString(), ...rest };
+}
+
+async function initStorage() {
+  const uri = process.env.MONGODB_URI;
+  if (!uri) {
+    console.warn("MONGODB_URI not set: detections are kept in memory only");
+    return;
+  }
+  try {
+    const client = new MongoClient(uri, { serverSelectionTimeoutMS: 10000 });
+    await client.connect();
+    const db = client.db(process.env.MONGODB_DB || "aitik");
+    detectionsCol = db.collection("detections");
+    settingsCol = db.collection("settings");
+    await detectionsCol.createIndex({ timestamp: -1 });
+
+    const docs = await detectionsCol
+      .find()
+      .sort({ timestamp: -1 })
+      .limit(100)
+      .toArray();
+    detections = docs.map(toDetection);
+    if (detections.length > 0) {
+      systemStatus.modelDeployed = true;
+      systemStatus.lastDetectionAt = detections[0].timestamp;
+      systemStatus.lastSeen = detections[0].timestamp;
+    }
+
+    const saved = await settingsCol.findOne({ _id: "tunnelUrl" });
+    if (saved) tunnelUrl = saved.value;
+
+    systemStatus.storage = "mongodb";
+    console.log(`MongoDB connected: loaded ${detections.length} detections`);
+  } catch (err) {
+    detectionsCol = null;
+    settingsCol = null;
+    console.error("MongoDB connection failed, using memory:", err.message);
+  }
+}
+
+// Pi is online if its tunnel answers; cached so dashboards don't hammer it
+let lastTunnelCheck = 0;
+async function getSystemStatus() {
+  if (Date.now() - lastTunnelCheck > 30000) {
+    lastTunnelCheck = Date.now();
+    if (tunnelUrl) {
+      try {
+        const r = await fetch(tunnelUrl, { signal: AbortSignal.timeout(8000) });
+        systemStatus.online = r.ok;
+      } catch {
+        systemStatus.online = false;
+      }
+      if (systemStatus.online) systemStatus.lastSeen = new Date().toISOString();
+    } else {
+      systemStatus.online = false;
+    }
+  }
+  return systemStatus;
+}
 
 app.get("/", (req, res) => {
   res.json({ status: "AI-TIK Backend Running", version: "1.0.0" });
@@ -26,26 +101,53 @@ app.get("/", (req, res) => {
 
 app.get("/detections", (req, res) => res.json(detections));
 
-app.get("/status", (req, res) => res.json(systemStatus));
+app.get("/status", async (req, res) => res.json(await getSystemStatus()));
 
 app.get("/tunnel-url", (req, res) => res.json({ url: tunnelUrl }));
 
-app.post("/tunnel-url", (req, res) => {
+app.post("/tunnel-url", async (req, res) => {
   tunnelUrl = req.body.url;
+  lastTunnelCheck = 0;
   console.log("Tunnel URL updated:", tunnelUrl);
   io.emit("tunnel_url", { url: tunnelUrl });
+  if (settingsCol) {
+    try {
+      await settingsCol.updateOne(
+        { _id: "tunnelUrl" },
+        { $set: { value: tunnelUrl, updatedAt: new Date().toISOString() } },
+        { upsert: true },
+      );
+    } catch (err) {
+      console.error("Failed to save tunnel URL:", err.message);
+    }
+  }
   res.json({ success: true });
 });
 
-app.post("/detect", (req, res) => {
-  const detection = {
-    id: detections.length + 1,
-    duck: req.body.duck || "Unknown",
+app.post("/detect", async (req, res) => {
+  const { snapshot } = req.body;
+  const doc = {
+    // URL/path to the frame hosted elsewhere; image data is never stored here
+    snapshot: typeof snapshot === "string" && snapshot ? snapshot : null,
     behavior: req.body.behavior,
     confidence: req.body.confidence,
     camera: req.body.camera,
     timestamp: new Date().toISOString(),
   };
+
+  let detection;
+  if (detectionsCol) {
+    try {
+      const { insertedId } = await detectionsCol.insertOne(doc);
+      detection = toDetection({ _id: insertedId, ...doc });
+    } catch (err) {
+      console.error("Failed to save detection:", err.message);
+      return res.status(500).json({ success: false, error: "storage failed" });
+    }
+  } else {
+    detection = { id: String(Date.now()), ...doc };
+  }
+
   detections.unshift(detection);
   if (detections.length > 100) detections.pop();
   io.emit("new_detection", detection);
@@ -55,17 +157,25 @@ app.post("/detect", (req, res) => {
       detection,
     });
   }
-  systemStatus.lastSeen = new Date().toISOString();
+  systemStatus.modelDeployed = true;
+  systemStatus.lastDetectionAt = detection.timestamp;
+  systemStatus.lastSeen = detection.timestamp;
   res.json({ success: true, detection });
 });
 
-io.on("connection", (socket) => {
+io.on("connection", async (socket) => {
   console.log("Dashboard connected:", socket.id);
-  socket.emit("init", { detections, systemStatus, tunnelUrl });
+  socket.emit("init", {
+    detections,
+    systemStatus: await getSystemStatus(),
+    tunnelUrl,
+  });
   socket.on("disconnect", () => console.log("Disconnected:", socket.id));
 });
 
 const PORT = process.env.PORT || 8080;
-server.listen(PORT, () =>
-  console.log(`AI-TIK Backend running on port ${PORT}`),
-);
+initStorage().then(() => {
+  server.listen(PORT, () =>
+    console.log(`AI-TIK Backend running on port ${PORT}`),
+  );
+});
