@@ -1,7 +1,7 @@
 import axios from "axios";
 import { io } from "socket.io-client";
 
-const BACKEND_URL = "https://aitik-backend.onrender.com";
+const BACKEND_URL = "https://aitik-system.onrender.com";
 
 export const api = axios.create({
   baseURL: BACKEND_URL,
