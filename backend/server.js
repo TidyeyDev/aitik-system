@@ -55,7 +55,9 @@ function eggSizeCategory(weight) {
 async function initStorage() {
   const uri = process.env.MONGODB_URI;
   if (!uri) {
-    console.warn("MONGODB_URI not set: detections and egg records are kept in memory only");
+    console.warn(
+      "MONGODB_URI not set: detections and egg records are kept in memory only",
+    );
     return;
   }
   try {
@@ -153,11 +155,14 @@ app.post("/tunnel-url", async (req, res) => {
 app.post("/detect", async (req, res) => {
   const { snapshot } = req.body;
   const doc = {
-    // URL/path to the frame hosted elsewhere; image data is never stored here
     snapshot: typeof snapshot === "string" && snapshot ? snapshot : null,
     behavior: req.body.behavior,
     confidence: req.body.confidence,
     camera: req.body.camera,
+    bbox: toBbox(req.body.bbox),
+    frame: toFrame(req.body.frame),
+    frameId: toFrameId(req.body.frameId),
+    capturedAt: toTimestamp(req.body.capturedAt),
     timestamp: new Date().toISOString(),
   };
 
@@ -187,6 +192,71 @@ app.post("/detect", async (req, res) => {
   systemStatus.lastDetectionAt = detection.timestamp;
   systemStatus.lastSeen = detection.timestamp;
   res.json({ success: true, detection });
+});
+
+function isPositive(n) {
+  return typeof n === "number" && Number.isFinite(n) && n > 0;
+}
+
+function toFrame(frame) {
+  if (!frame || !isPositive(frame.width) || !isPositive(frame.height)) return null;
+  return { width: frame.width, height: frame.height };
+}
+
+// x and y are the box center, in pixels of the analyzed frame (as Roboflow returns them).
+function toBbox(bbox) {
+  if (
+    !bbox ||
+    typeof bbox.x !== "number" || !Number.isFinite(bbox.x) ||
+    typeof bbox.y !== "number" || !Number.isFinite(bbox.y) ||
+    !isPositive(bbox.width) || !isPositive(bbox.height)
+  ) {
+    return null;
+  }
+  return { x: bbox.x, y: bbox.y, width: bbox.width, height: bbox.height };
+}
+
+function toFrameId(frameId) {
+  return typeof frameId === "string" && frameId.length > 0 && frameId.length <= 100
+    ? frameId
+    : null;
+}
+
+function toTimestamp(value) {
+  if (typeof value !== "string") return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString();
+}
+
+// Live boxes for the dashboard overlay. Broadcast only, nothing is stored;
+// an empty boxes list clears that camera.
+app.post("/frame-boxes", (req, res) => {
+  const { camera } = req.body;
+  if (typeof camera !== "string" || !camera) {
+    return res.status(400).json({ success: false, error: "camera required" });
+  }
+  const frame = toFrame(req.body.frame);
+  const boxes = (Array.isArray(req.body.boxes) ? req.body.boxes : [])
+    .slice(0, 50)
+    .map((b) => ({
+      behavior: b && b.behavior,
+      confidence: b && b.confidence,
+      bbox: toBbox(b && b.bbox),
+    }))
+    .filter((b) => b.bbox !== null);
+  if (boxes.length > 0 && !frame) {
+    return res.status(400).json({ success: false, error: "frame required with boxes" });
+  }
+
+  io.emit("frame_boxes", {
+    camera,
+    frameId: toFrameId(req.body.frameId),
+    capturedAt: toTimestamp(req.body.capturedAt),
+    frame,
+    boxes,
+  });
+  systemStatus.lastSeen = new Date().toISOString();
+  res.json({ success: true });
 });
 
 app.get("/eggs", (req, res) => res.json(eggRecords));
