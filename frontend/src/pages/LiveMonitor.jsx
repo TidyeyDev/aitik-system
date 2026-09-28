@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { api, socket } from "../api/client";
+import { behaviorLabel } from "../behavior";
 
 const cameras = [
   { id: "cam1", label: "Camera 1", position: "North" },
@@ -82,7 +83,7 @@ function BoxOverlay({ videoRef, entry }) {
         const { x, y, width, height } = b.bbox;
         const left = offsetX + (x - width / 2) * sx;
         const top = offsetY + (y - height / 2) * sy;
-        const color = BEHAVIOR_COLORS[b.behavior] || "#94a3b8";
+        const color = BEHAVIOR_COLORS[behaviorLabel(b.behavior)] || "#94a3b8";
         const labelInside = top < LABEL_HEIGHT;
         return (
           <div
@@ -108,7 +109,7 @@ function BoxOverlay({ videoRef, entry }) {
                 color: "#050d1a",
               }}
             >
-              {b.behavior || "Unknown"}
+              {behaviorLabel(b.behavior)}
               {formatConfidence(b.confidence)}
             </span>
           </div>

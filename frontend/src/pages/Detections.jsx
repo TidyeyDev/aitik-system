@@ -1,5 +1,8 @@
 import { useState, useEffect } from "react";
 import { api, socket } from "../api/client";
+import SnapshotImage from "../components/SnapshotImage";
+import { useTunnelUrl } from "../api/useTunnelUrl";
+import { behaviorLabel, isBehavior } from "../behavior";
 
 const BEHAVIOR_COLORS = {
   Receptive: "#10b981",
@@ -13,6 +16,7 @@ const behaviors = ["All", "Receptive", "Mating", "Neutral", "Non-receptive"];
 export default function Detections() {
   const [filter, setFilter] = useState("All");
   const [detections, setDetections] = useState([]);
+  const tunnelUrl = useTunnelUrl();
 
   useEffect(() => {
     api
@@ -34,13 +38,13 @@ export default function Detections() {
   const filtered =
     filter === "All"
       ? detections
-      : detections.filter((d) => d.behavior === filter);
+      : detections.filter((d) => isBehavior(d.behavior, filter));
 
   const counts = {
-    Receptive: detections.filter((d) => d.behavior === "Receptive").length,
-    Mating: detections.filter((d) => d.behavior === "Mating").length,
-    Neutral: detections.filter((d) => d.behavior === "Neutral").length,
-    "Non-receptive": detections.filter((d) => d.behavior === "Non-receptive")
+    Receptive: detections.filter((d) => isBehavior(d.behavior, "Receptive")).length,
+    Mating: detections.filter((d) => isBehavior(d.behavior, "Mating")).length,
+    Neutral: detections.filter((d) => isBehavior(d.behavior, "Neutral")).length,
+    "Non-receptive": detections.filter((d) => isBehavior(d.behavior, "Non-receptive"))
       .length,
   };
 
@@ -198,13 +202,13 @@ export default function Detections() {
                 >
                   <td className="px-6 py-4">
                     {d.snapshot ? (
-                      <a href={d.snapshot} target="_blank" rel="noreferrer">
-                        <img
-                          src={d.snapshot}
-                          alt={`${d.behavior} snapshot`}
-                          className="w-20 h-12 object-cover rounded"
-                        />
-                      </a>
+                      <SnapshotImage
+                        snapshot={d.snapshot}
+                        tunnelUrl={tunnelUrl}
+                        alt={`${behaviorLabel(d.behavior)} snapshot`}
+                        className="w-20 h-12 object-cover rounded"
+                        link
+                      />
                     ) : (
                       <span className="text-xs" style={{ color: "#475569" }}>
                         None
@@ -215,12 +219,12 @@ export default function Detections() {
                     <span
                       className="px-2 py-1 rounded-full text-xs font-semibold"
                       style={{
-                        background: `${BEHAVIOR_COLORS[d.behavior]}20`,
-                        color: BEHAVIOR_COLORS[d.behavior],
-                        border: `1px solid ${BEHAVIOR_COLORS[d.behavior]}40`,
+                        background: `${BEHAVIOR_COLORS[behaviorLabel(d.behavior)]}20`,
+                        color: BEHAVIOR_COLORS[behaviorLabel(d.behavior)],
+                        border: `1px solid ${BEHAVIOR_COLORS[behaviorLabel(d.behavior)]}40`,
                       }}
                     >
-                      {d.behavior}
+                      {behaviorLabel(d.behavior)}
                     </span>
                   </td>
                   <td className="px-6 py-4" style={{ color: "#94a3b8" }}>

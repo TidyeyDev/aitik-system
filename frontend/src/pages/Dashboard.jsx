@@ -9,6 +9,9 @@ import {
   ResponsiveContainer,
   Cell,
 } from "recharts";
+import SnapshotImage from "../components/SnapshotImage";
+import { useTunnelUrl } from "../api/useTunnelUrl";
+import { behaviorLabel, isBehavior } from "../behavior";
 
 const BEHAVIOR_COLORS = {
   Receptive: "#10b981",
@@ -119,6 +122,7 @@ function SystemStatusPanel({ status }) {
 }
 
 function SnapshotFeed({ detections }) {
+  const tunnelUrl = useTunnelUrl();
   return (
     <div
       className="rounded-xl p-6"
@@ -159,9 +163,10 @@ function SnapshotFeed({ detections }) {
               style={{ background: "#0a1628", border: "1px solid #1a3251" }}
             >
               {d.snapshot ? (
-                <img
-                  src={d.snapshot}
-                  alt={`${d.behavior} snapshot from ${d.camera}`}
+                <SnapshotImage
+                  snapshot={d.snapshot}
+                  tunnelUrl={tunnelUrl}
+                  alt={`${behaviorLabel(d.behavior)} snapshot from ${d.camera}`}
                   className="w-full h-32 object-cover"
                 />
               ) : (
@@ -177,11 +182,11 @@ function SnapshotFeed({ detections }) {
                   <span
                     className="text-xs font-semibold px-2 py-0.5 rounded-full"
                     style={{
-                      background: `${BEHAVIOR_COLORS[d.behavior]}20`,
-                      color: BEHAVIOR_COLORS[d.behavior],
+                      background: `${BEHAVIOR_COLORS[behaviorLabel(d.behavior)]}20`,
+                      color: BEHAVIOR_COLORS[behaviorLabel(d.behavior)],
                     }}
                   >
-                    {d.behavior}
+                    {behaviorLabel(d.behavior)}
                   </span>
                   <span className="text-xs" style={{ color: "#475569" }}>
                     {d.camera}
@@ -280,10 +285,10 @@ export default function Dashboard() {
   }, []);
 
   const counts = {
-    Receptive: detections.filter((d) => d.behavior === "Receptive").length,
-    Mating: detections.filter((d) => d.behavior === "Mating").length,
-    Neutral: detections.filter((d) => d.behavior === "Neutral").length,
-    "Non-receptive": detections.filter((d) => d.behavior === "Non-receptive")
+    Receptive: detections.filter((d) => isBehavior(d.behavior, "Receptive")).length,
+    Mating: detections.filter((d) => isBehavior(d.behavior, "Mating")).length,
+    Neutral: detections.filter((d) => isBehavior(d.behavior, "Neutral")).length,
+    "Non-receptive": detections.filter((d) => isBehavior(d.behavior, "Non-receptive"))
       .length,
   };
 
@@ -293,10 +298,10 @@ export default function Dashboard() {
   }));
 
   const receptiveToday = detections.filter(
-    (d) => d.behavior === "Receptive" && isToday(d.timestamp),
+    (d) => isBehavior(d.behavior, "Receptive") && isToday(d.timestamp),
   ).length;
   const matingToday = detections.filter(
-    (d) => d.behavior === "Mating" && isToday(d.timestamp),
+    (d) => isBehavior(d.behavior, "Mating") && isToday(d.timestamp),
   ).length;
 
   return (
@@ -485,12 +490,12 @@ export default function Dashboard() {
                 <div
                   key={i}
                   className="flex items-center justify-between p-3 rounded-lg"
-                  style={{ background: BEHAVIOR_BG[d.behavior] }}
+                  style={{ background: BEHAVIOR_BG[behaviorLabel(d.behavior)] }}
                 >
                   <div className="flex items-center gap-3">
                     <div
                       className="w-1.5 h-8 rounded-full"
-                      style={{ background: BEHAVIOR_COLORS[d.behavior] }}
+                      style={{ background: BEHAVIOR_COLORS[behaviorLabel(d.behavior)] }}
                     />
                     <div>
                       <div className="text-sm font-medium text-white">
@@ -502,12 +507,12 @@ export default function Dashboard() {
                     <div
                       className="text-xs font-semibold px-2 py-0.5 rounded-full"
                       style={{
-                        background: `${BEHAVIOR_COLORS[d.behavior]}20`,
-                        color: BEHAVIOR_COLORS[d.behavior],
-                        border: `1px solid ${BEHAVIOR_COLORS[d.behavior]}40`,
+                        background: `${BEHAVIOR_COLORS[behaviorLabel(d.behavior)]}20`,
+                        color: BEHAVIOR_COLORS[behaviorLabel(d.behavior)],
+                        border: `1px solid ${BEHAVIOR_COLORS[behaviorLabel(d.behavior)]}40`,
                       }}
                     >
-                      {d.behavior}
+                      {behaviorLabel(d.behavior)}
                     </div>
                     <div className="text-xs mt-1" style={{ color: "#475569" }}>
                       {d.confidence} ·{" "}
