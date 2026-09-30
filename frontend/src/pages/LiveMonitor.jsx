@@ -2,12 +2,16 @@ import { useEffect, useRef, useState } from "react";
 import { api, socket } from "../api/client";
 import { behaviorLabel } from "../behavior";
 
+// "live" cameras are streamed over HLS; "recording" cameras only record on
+// the Pi and upload clips to Telegram, so they have no stream to play.
 const cameras = [
-  { id: "cam1", label: "Camera 1", position: "North" },
-  { id: "cam2", label: "Camera 2", position: "South" },
-  { id: "cam3", label: "Camera 3", position: "East" },
-  { id: "cam4", label: "Camera 4", position: "West" },
+  { id: "cam1", label: "Camera 1", position: "North", mode: "recording" },
+  { id: "cam2", label: "Camera 2", position: "South", mode: "recording" },
+  { id: "cam3", label: "Camera 3", position: "East", mode: "live" },
+  { id: "cam4", label: "Camera 4", position: "West", mode: "live" },
 ];
+
+const RECORDING_COLOR = "#818cf8";
 
 const BEHAVIOR_COLORS = {
   Receptive: "#10b981",
@@ -239,6 +243,65 @@ function CameraFeed({ cam, tunnelUrl, boxes }) {
   );
 }
 
+function RecordingTile({ cam }) {
+  return (
+    <div
+      className="rounded-xl overflow-hidden"
+      style={{ background: "#0d1b2e", border: "1px solid #1a3251" }}
+    >
+      {/* Camera Header */}
+      <div
+        className="flex items-center justify-between px-4 py-3"
+        style={{ borderBottom: "1px solid #1a3251" }}
+      >
+        <div className="flex items-center gap-3">
+          <div
+            className="w-2 h-2 rounded-full"
+            style={{ background: RECORDING_COLOR }}
+          />
+          <div>
+            <div className="text-sm font-medium text-white">{cam.label}</div>
+            <div className="text-xs" style={{ color: "#475569" }}>
+              {cam.position} angle
+            </div>
+          </div>
+        </div>
+        <span
+          className="text-xs font-bold px-2 py-0.5 rounded"
+          style={{ background: `${RECORDING_COLOR}20`, color: RECORDING_COLOR }}
+        >
+          ● RECORDING
+        </span>
+      </div>
+
+      {/* Placeholder in place of video */}
+      <div
+        className="relative flex flex-col items-center justify-center"
+        style={{ background: "#050d1a", aspectRatio: "16/9" }}
+      >
+        <div className="text-3xl mb-2">🎞️</div>
+        <div className="text-sm font-medium" style={{ color: RECORDING_COLOR }}>
+          Recording — clips sent via Telegram
+        </div>
+        <div className="text-xs mt-1" style={{ color: "#475569" }}>
+          {cam.label} — {cam.position} · not streamed live
+        </div>
+      </div>
+
+      {/* Camera Footer */}
+      <div className="flex items-center justify-between px-4 py-2">
+        <div className="flex gap-3 text-xs" style={{ color: "#475569" }}>
+          <span>10-min clips</span>
+          <span>Telegram</span>
+        </div>
+        <span className="text-xs" style={{ color: "#334155" }}>
+          Turentigue Farm
+        </span>
+      </div>
+    </div>
+  );
+}
+
 export default function LiveMonitor() {
   const [tunnelUrl, setTunnelUrl] = useState(null);
   const [selected, setSelected] = useState(null);
@@ -329,13 +392,16 @@ export default function LiveMonitor() {
             }}
           >
             <span
-              className="w-2 h-2 rounded-full animate-pulse"
-              style={{ background: "#10b981" }}
+              className={`w-2 h-2 rounded-full ${cam.mode === "live" ? "animate-pulse" : ""}`}
+              style={{
+                background: cam.mode === "live" ? "#10b981" : RECORDING_COLOR,
+              }}
             />
             <div>
               <div className="text-sm font-medium text-white">{cam.label}</div>
               <div className="text-xs" style={{ color: "#475569" }}>
                 {cam.position}
+                {cam.mode === "recording" && " · Recording only"}
               </div>
             </div>
           </button>
@@ -343,31 +409,39 @@ export default function LiveMonitor() {
       </div>
 
       {/* Camera Grid */}
-      {!tunnelUrl ? (
+      {/* Recording tiles don't depend on the stream server, so the grid
+          renders straight away; live feeds wait in their "connecting" state
+          until the tunnel URL arrives. */}
+      {!tunnelUrl && (
         <div
-          className="rounded-xl p-16 text-center"
+          className="rounded-xl px-4 py-3 mb-4 flex items-center gap-3"
           style={{ background: "#0d1b2e", border: "1px solid #1a3251" }}
         >
-          <div className="text-5xl mb-4">📡</div>
-          <div className="text-lg font-medium text-white mb-2">
-            Connecting to stream server
-          </div>
-          <div className="text-sm" style={{ color: "#475569" }}>
-            Make sure the Pi is online and streaming service is running
+          <span className="text-xl">📡</span>
+          <div>
+            <div className="text-sm font-medium text-white">
+              Connecting to stream server
+            </div>
+            <div className="text-xs" style={{ color: "#475569" }}>
+              Make sure the Pi is online and streaming service is running
+            </div>
           </div>
         </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {cameras.map((cam) => (
+      )}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {cameras.map((cam) =>
+          cam.mode === "live" ? (
             <CameraFeed
               key={cam.id}
               cam={cam}
               tunnelUrl={tunnelUrl}
               boxes={frameBoxes[cam.id]}
             />
-          ))}
-        </div>
-      )}
+          ) : (
+            <RecordingTile key={cam.id} cam={cam} />
+          ),
+        )}
+      </div>
 
       {/* System Info */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6">
