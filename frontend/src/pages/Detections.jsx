@@ -231,7 +231,7 @@ export default function Detections() {
                     {d.confidence}
                   </td>
                   <td className="px-6 py-4" style={{ color: "#94a3b8" }}>
-                    {d.camera}
+                     {d.camera}
                   </td>
                   <td className="px-6 py-4" style={{ color: "#475569" }}>
                     {new Date(d.timestamp).toLocaleString()}

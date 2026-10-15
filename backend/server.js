@@ -1,344 +1,214 @@
-const express = require("express");
-const http = require("http");
-const { Server } = require("socket.io");
-const cors = require("cors");
-const { MongoClient, ObjectId } = require("mongodb");
+const express = require('express')
+const http = require('http')
+const { Server } = require('socket.io')
+const cors = require('cors')
+const { createProxyMiddleware } = require('http-proxy-middleware')
 
-const app = express();
-const server = http.createServer(app);
+const app = express()
+const server = http.createServer(app)
 const io = new Server(server, {
-  cors: { origin: "*", methods: ["GET", "POST"] },
-});
+  cors: {
+    origin: '*',
+    methods: ['GET', 'POST']
+  }
+})
 
-app.use(cors());
-app.use(express.json());
+app.use(cors())
+app.use(express.json())
 
-// Latest detections, newest first. Mirrors MongoDB when connected,
-// otherwise it is the only copy and is lost on restart.
-let detections = [];
-let tunnelUrl = null;
+const path = require('path')
 
-// Egg weight records, oldest first. Same persistence rules as detections.
-let eggRecords = [];
+// Serve HLS stream files
+app.use('/hls', express.static('/tmp/hls', {
+  setHeaders: (res) => {
+    res.setHeader('Access-Control-Allow-Origin', '*')
+    res.setHeader('Cache-Control', 'no-cache')
+  }
+}))
 
-// Set by initStorage() when MONGODB_URI is configured and reachable
-let detectionsCol = null;
-let settingsCol = null;
-let eggRecordsCol = null;
+// Serve detection snapshots saved by inference/detect_behaviors.py
+app.use('/snapshots', express.static('/home/pi/aitik/detections', {
+  setHeaders: (res) => {
+    res.setHeader('Access-Control-Allow-Origin', '*')
+    res.setHeader('Cache-Control', 'no-cache')
+  }
+}))
 
+// Proxy HLS streams from MediaMTX
+app.use('/stream', createProxyMiddleware({
+  target: 'http://localhost:8888',
+  changeOrigin: true,
+  pathRewrite: { '^/stream': '' }
+}))
+
+// Store detections in memory
+let detections = []
 // Only report what the backend actually knows; null means "not reported yet"
 let systemStatus = {
   cameras: null,
   online: false,
   lastSeen: null,
   modelDeployed: false,
-  lastDetectionAt: null,
-  storage: "memory",
-};
-
-function toDetection(doc) {
-  const { _id, ...rest } = doc;
-  return { id: _id.toString(), ...rest };
-}
-
-const EGG_BEHAVIORS = ["Receptive", "Neutral", "Non-receptive"];
-
-// PNS/BAFS 321:2021 size categories. Single source of truth: the frontend
-// displays the stored sizeCategory rather than recalculating it.
-function eggSizeCategory(weight) {
-  if (weight >= 70) return "Jumbo";
-  if (weight >= 65) return "Large";
-  if (weight >= 60) return "Medium";
-  return "Small";
-}
-
-async function initStorage() {
-  const uri = process.env.MONGODB_URI;
-  if (!uri) {
-    console.warn(
-      "MONGODB_URI not set: detections and egg records are kept in memory only",
-    );
-    return;
-  }
-  try {
-    const client = new MongoClient(uri, { serverSelectionTimeoutMS: 10000 });
-    await client.connect();
-    const db = client.db(process.env.MONGODB_DB || "aitik");
-    detectionsCol = db.collection("detections");
-    settingsCol = db.collection("settings");
-    eggRecordsCol = db.collection("eggRecords");
-    await detectionsCol.createIndex({ timestamp: -1 });
-    await eggRecordsCol.createIndex({ date: 1, createdAt: 1 });
-
-    const docs = await detectionsCol
-      .find()
-      .sort({ timestamp: -1 })
-      .limit(100)
-      .toArray();
-    detections = docs.map(toDetection);
-    if (detections.length > 0) {
-      systemStatus.modelDeployed = true;
-      systemStatus.lastDetectionAt = detections[0].timestamp;
-      systemStatus.lastSeen = detections[0].timestamp;
-    }
-
-    const eggDocs = await eggRecordsCol
-      .find()
-      .sort({ date: 1, createdAt: 1 })
-      .toArray();
-    eggRecords = eggDocs.map(toDetection);
-
-    const saved = await settingsCol.findOne({ _id: "tunnelUrl" });
-    if (saved) tunnelUrl = saved.value;
-
-    systemStatus.storage = "mongodb";
-    console.log(
-      `MongoDB connected: loaded ${detections.length} detections, ${eggRecords.length} egg records`,
-    );
-  } catch (err) {
-    detectionsCol = null;
-    settingsCol = null;
-    eggRecordsCol = null;
-    console.error("MongoDB connection failed, using memory:", err.message);
-  }
+  lastDetectionAt: null
 }
 
 // Pi is online if its tunnel answers; cached so dashboards don't hammer it
-let lastTunnelCheck = 0;
+let lastTunnelCheck = 0
 async function getSystemStatus() {
   if (Date.now() - lastTunnelCheck > 30000) {
-    lastTunnelCheck = Date.now();
+    lastTunnelCheck = Date.now()
     if (tunnelUrl) {
       try {
-        const r = await fetch(tunnelUrl, { signal: AbortSignal.timeout(8000) });
-        systemStatus.online = r.ok;
+        const r = await fetch(tunnelUrl, { signal: AbortSignal.timeout(8000) })
+        systemStatus.online = r.ok
       } catch {
-        systemStatus.online = false;
+        systemStatus.online = false
       }
-      if (systemStatus.online) systemStatus.lastSeen = new Date().toISOString();
+      if (systemStatus.online) systemStatus.lastSeen = new Date().toISOString()
     } else {
-      systemStatus.online = false;
+      systemStatus.online = false
     }
   }
-  return systemStatus;
+  return systemStatus
 }
 
-app.get("/", (req, res) => {
-  res.json({ status: "AI-TIK Backend Running", version: "1.0.0" });
-});
+// Health check
+app.get('/', (req, res) => {
+  res.json({ status: 'AI-TIK Backend Running', version: '1.0.0' })
+})
 
-app.get("/detections", (req, res) => res.json(detections));
+// Get all detections
+app.get('/detections', (req, res) => {
+  res.json(detections)
+})
 
-app.get("/status", async (req, res) => res.json(await getSystemStatus()));
+// Get system status
+app.get('/status', async (req, res) => {
+  res.json(await getSystemStatus())
+})
 
-app.get("/tunnel-url", (req, res) => res.json({ url: tunnelUrl }));
-
-app.post("/tunnel-url", async (req, res) => {
-  tunnelUrl = req.body.url;
-  lastTunnelCheck = 0;
-  console.log("Tunnel URL updated:", tunnelUrl);
-  io.emit("tunnel_url", { url: tunnelUrl });
-  if (settingsCol) {
-    try {
-      await settingsCol.updateOne(
-        { _id: "tunnelUrl" },
-        { $set: { value: tunnelUrl, updatedAt: new Date().toISOString() } },
-        { upsert: true },
-      );
-    } catch (err) {
-      console.error("Failed to save tunnel URL:", err.message);
-    }
-  }
-  res.json({ success: true });
-});
-
-app.post("/detect", async (req, res) => {
-  const { snapshot } = req.body;
-  const doc = {
-    snapshot: typeof snapshot === "string" && snapshot ? snapshot : null,
+// Pi posts detection results here
+app.post('/detect', (req, res) => {
+  const detection = {
+    id: detections.length + 1,
+    duck: req.body.duck || 'Unknown',
     behavior: req.body.behavior,
     confidence: req.body.confidence,
     camera: req.body.camera,
-    bbox: toBbox(req.body.bbox),
-    frame: toFrame(req.body.frame),
-    frameId: toFrameId(req.body.frameId),
-    capturedAt: toTimestamp(req.body.capturedAt),
-    timestamp: new Date().toISOString(),
-  };
-
-  let detection;
-  if (detectionsCol) {
-    try {
-      const { insertedId } = await detectionsCol.insertOne(doc);
-      detection = toDetection({ _id: insertedId, ...doc });
-    } catch (err) {
-      console.error("Failed to save detection:", err.message);
-      return res.status(500).json({ success: false, error: "storage failed" });
-    }
-  } else {
-    detection = { id: String(Date.now()), ...doc };
+    timestamp: new Date().toISOString()
   }
 
-  detections.unshift(detection);
-  if (detections.length > 100) detections.pop();
-  io.emit("new_detection", detection);
-  if (detection.behavior === "Receptive") {
-    io.emit("alert", {
+  detections.unshift(detection)
+  if (detections.length > 100) detections.pop()
+
+  // Send real-time update to dashboard
+  io.emit('new_detection', detection)
+
+  // Send alert if receptive
+  if (detection.behavior === 'Receptive') {
+    io.emit('alert', {
       message: `Receptive duck detected at ${detection.camera}!`,
-      detection,
-    });
+      detection
+    })
   }
-  systemStatus.modelDeployed = true;
-  systemStatus.lastDetectionAt = detection.timestamp;
-  systemStatus.lastSeen = detection.timestamp;
-  res.json({ success: true, detection });
-});
 
-function isPositive(n) {
-  return typeof n === "number" && Number.isFinite(n) && n > 0;
-}
+  systemStatus.modelDeployed = true
+  systemStatus.lastDetectionAt = detection.timestamp
+  systemStatus.lastSeen = detection.timestamp
+  res.json({ success: true, detection })
+})
+
+// Latest boxes per camera for the Live Monitor overlay (memory only).
+// bbox is Roboflow format: x/y are the box CENTER, in pixels of `frame`.
+const frameBoxes = Object.create(null) // no prototype, so any camera name is a safe key
+const MAX_FRAME_BOX_CAMERAS = 32
+
+const isNum = (n) => typeof n === 'number' && Number.isFinite(n)
+const isPositive = (n) => isNum(n) && n > 0
 
 function toFrame(frame) {
-  if (!frame || !isPositive(frame.width) || !isPositive(frame.height)) return null;
-  return { width: frame.width, height: frame.height };
+  if (!frame || !isPositive(frame.width) || !isPositive(frame.height)) return null
+  return { width: frame.width, height: frame.height }
 }
 
-// x and y are the box center, in pixels of the analyzed frame (as Roboflow returns them).
 function toBbox(bbox) {
-  if (
-    !bbox ||
-    typeof bbox.x !== "number" || !Number.isFinite(bbox.x) ||
-    typeof bbox.y !== "number" || !Number.isFinite(bbox.y) ||
-    !isPositive(bbox.width) || !isPositive(bbox.height)
-  ) {
-    return null;
+  if (!bbox || !isNum(bbox.x) || !isNum(bbox.y)) return null
+  if (!isPositive(bbox.width) || !isPositive(bbox.height)) return null
+  return { x: bbox.x, y: bbox.y, width: bbox.width, height: bbox.height }
+}
+
+// Pi posts every analyzed frame's boxes here; an empty `boxes` list clears that camera
+app.post('/frame-boxes', (req, res) => {
+  const { camera } = req.body
+  if (typeof camera !== 'string' || !camera || camera.length > 50) {
+    return res.status(400).json({ success: false, error: 'camera required' })
   }
-  return { x: bbox.x, y: bbox.y, width: bbox.width, height: bbox.height };
-}
-
-function toFrameId(frameId) {
-  return typeof frameId === "string" && frameId.length > 0 && frameId.length <= 100
-    ? frameId
-    : null;
-}
-
-function toTimestamp(value) {
-  if (typeof value !== "string") return null;
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? null : date.toISOString();
-}
-
-// Live boxes for the dashboard overlay. Broadcast only, nothing is stored;
-// an empty boxes list clears that camera.
-app.post("/frame-boxes", (req, res) => {
-  const { camera } = req.body;
-  if (typeof camera !== "string" || !camera) {
-    return res.status(400).json({ success: false, error: "camera required" });
+  if (!(camera in frameBoxes) && Object.keys(frameBoxes).length >= MAX_FRAME_BOX_CAMERAS) {
+    return res.status(400).json({ success: false, error: 'too many cameras' })
   }
-  const frame = toFrame(req.body.frame);
+  const frame = toFrame(req.body.frame)
   const boxes = (Array.isArray(req.body.boxes) ? req.body.boxes : [])
     .slice(0, 50)
     .map((b) => ({
-      behavior: b && b.behavior,
-      confidence: b && b.confidence,
-      bbox: toBbox(b && b.bbox),
+      behavior: b && typeof b.behavior === 'string' ? b.behavior : 'unknown',
+      confidence: b && isNum(b.confidence) ? b.confidence : null,
+      bbox: toBbox(b && b.bbox)
     }))
-    .filter((b) => b.bbox !== null);
+    .filter((b) => b.bbox)
   if (boxes.length > 0 && !frame) {
-    return res.status(400).json({ success: false, error: "frame required with boxes" });
+    return res.status(400).json({ success: false, error: 'frame required with boxes' })
   }
 
-  io.emit("frame_boxes", {
+  const payload = {
     camera,
-    frameId: toFrameId(req.body.frameId),
-    capturedAt: toTimestamp(req.body.capturedAt),
+    frameId: typeof req.body.frameId === 'string' ? req.body.frameId.slice(0, 100) : null,
+    capturedAt: typeof req.body.capturedAt === 'string' ? req.body.capturedAt.slice(0, 40) : null,
+    receivedAt: new Date().toISOString(),
     frame,
-    boxes,
-  });
-  systemStatus.lastSeen = new Date().toISOString();
-  res.json({ success: true });
-});
-
-app.get("/eggs", (req, res) => res.json(eggRecords));
-
-app.post("/eggs", async (req, res) => {
-  const duck = typeof req.body.duck === "string" ? req.body.duck.trim() : "";
-  const { behavior, date } = req.body;
-  const weight = Number(req.body.weight);
-
-  if (!duck) return res.status(400).json({ error: "duck is required" });
-  if (!EGG_BEHAVIORS.includes(behavior))
-    return res.status(400).json({ error: "invalid behavior" });
-  if (!Number.isFinite(weight) || weight <= 0)
-    return res.status(400).json({ error: "weight must be a positive number" });
-  if (typeof date !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(date))
-    return res.status(400).json({ error: "date must be YYYY-MM-DD" });
-
-  const doc = {
-    duck,
-    behavior,
-    weight,
-    sizeCategory: eggSizeCategory(weight),
-    date,
-    createdAt: new Date().toISOString(),
-  };
-
-  let record;
-  if (eggRecordsCol) {
-    try {
-      const { insertedId } = await eggRecordsCol.insertOne(doc);
-      record = toDetection({ _id: insertedId, ...doc });
-    } catch (err) {
-      console.error("Failed to save egg record:", err.message);
-      return res.status(500).json({ error: "storage failed" });
-    }
-  } else {
-    record = { id: String(Date.now()), ...doc };
+    boxes
   }
+  frameBoxes[camera] = payload
+  io.emit('frame_boxes', payload)
+  systemStatus.lastSeen = payload.receivedAt
+  res.json({ success: true })
+})
 
-  eggRecords.push(record);
-  eggRecords.sort((a, b) => a.date.localeCompare(b.date));
-  res.json({ success: true, record });
-});
+// Latest boxes for one camera; an empty list if none have arrived yet
+app.get('/frame-boxes/:camId', (req, res) => {
+  const { camId } = req.params
+  res.json(frameBoxes[camId] || {
+    camera: camId, frameId: null, capturedAt: null, receivedAt: null, frame: null, boxes: []
+  })
+})
 
-app.delete("/eggs/:id", async (req, res) => {
-  const { id } = req.params;
-  const index = eggRecords.findIndex((r) => r.id === id);
+// Socket connection
+io.on('connection', async (socket) => {
+  console.log('Dashboard connected:', socket.id)
+  socket.emit('init', { detections, systemStatus: await getSystemStatus() })
 
-  if (eggRecordsCol) {
-    if (!ObjectId.isValid(id))
-      return res.status(404).json({ error: "record not found" });
-    try {
-      const { deletedCount } = await eggRecordsCol.deleteOne({
-        _id: new ObjectId(id),
-      });
-      if (deletedCount === 0)
-        return res.status(404).json({ error: "record not found" });
-    } catch (err) {
-      console.error("Failed to delete egg record:", err.message);
-      return res.status(500).json({ error: "storage failed" });
-    }
-  } else if (index === -1) {
-    return res.status(404).json({ error: "record not found" });
-  }
+  socket.on('disconnect', () => {
+    console.log('Dashboard disconnected:', socket.id)
+  })
+})
 
-  if (index !== -1) eggRecords.splice(index, 1);
-  res.json({ success: true });
-});
+const PORT = 8080
+server.listen(PORT, () => {
+  console.log(`AI-TIK Backend running on port ${PORT}`)
+})
 
-io.on("connection", async (socket) => {
-  console.log("Dashboard connected:", socket.id);
-  socket.emit("init", {
-    detections,
-    systemStatus: await getSystemStatus(),
-    tunnelUrl,
-  });
-  socket.on("disconnect", () => console.log("Disconnected:", socket.id));
-});
+// Store tunnel URL
+let tunnelUrl = null
 
-const PORT = process.env.PORT || 8080;
-initStorage().then(() => {
-  server.listen(PORT, () =>
-    console.log(`AI-TIK Backend running on port ${PORT}`),
-  );
-});
+// Pi posts its tunnel URL here
+app.post('/tunnel-url', (req, res) => {
+  tunnelUrl = req.body.url
+  lastTunnelCheck = 0
+  console.log('Tunnel URL updated:', tunnelUrl)
+  io.emit('tunnel_url', { url: tunnelUrl })
+  res.json({ success: true })
+})
+
+// Get current tunnel URL
+app.get('/tunnel-url', (req, res) => {
+  res.json({ url: tunnelUrl })
+})
