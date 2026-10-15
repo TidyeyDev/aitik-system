@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { api, socket } from "../api/client";
-import { behaviorLabel } from "../behavior";
+import FrameBoxOverlay from "../components/FrameBoxOverlay";
 
 // "live" cameras are streamed over HLS; "recording" cameras only record on
 // the Pi and upload clips to Telegram, so they have no stream to play.
@@ -13,117 +13,7 @@ const cameras = [
 
 const RECORDING_COLOR = "#818cf8";
 
-const BEHAVIOR_COLORS = {
-  Receptive: "#10b981",
-  Mating: "#818cf8",
-  Neutral: "#f59e0b",
-  "Non-receptive": "#f43f5e",
-};
-
-// Boxes are cleared if a camera has sent nothing for this long.
-const BOX_TTL_MS = 30000;
-const LABEL_HEIGHT = 18;
-
-function formatConfidence(confidence) {
-  if (typeof confidence !== "number" || !Number.isFinite(confidence)) return "";
-  // Roboflow reports 0–1; accept 0–100 as well.
-  const pct = confidence <= 1 ? confidence * 100 : confidence;
-  return ` ${Math.round(pct)}%`;
-}
-
-// Draws detection boxes over the video. Box x/y are centres in pixels of
-// `frame`; they are scaled to the area the picture actually occupies inside
-// the <video> element (letterboxed for contain, cropped for cover).
-function BoxOverlay({ videoRef, entry }) {
-  const [layout, setLayout] = useState(null);
-
-  useEffect(() => {
-    const video = videoRef.current;
-    if (!video) return;
-    const measure = () =>
-      setLayout({
-        ew: video.clientWidth,
-        eh: video.clientHeight,
-        vw: video.videoWidth,
-        vh: video.videoHeight,
-        fit: getComputedStyle(video).objectFit,
-      });
-    measure();
-    const observer = new ResizeObserver(measure);
-    observer.observe(video);
-    video.addEventListener("loadedmetadata", measure);
-    video.addEventListener("resize", measure);
-    return () => {
-      observer.disconnect();
-      video.removeEventListener("loadedmetadata", measure);
-      video.removeEventListener("resize", measure);
-    };
-  }, [videoRef]);
-
-  if (!layout || !entry || !entry.frame || entry.boxes.length === 0) return null;
-
-  const { frame, boxes } = entry;
-  const { ew, eh, fit } = layout;
-  // Before metadata loads, assume the stream has the analysed frame's shape.
-  const vw = layout.vw || frame.width;
-  const vh = layout.vh || frame.height;
-
-  let shownWidth = ew;
-  let shownHeight = eh;
-  if (fit !== "fill") {
-    const scale =
-      fit === "cover" ? Math.max(ew / vw, eh / vh) : Math.min(ew / vw, eh / vh);
-    shownWidth = vw * scale;
-    shownHeight = vh * scale;
-  }
-  const offsetX = (ew - shownWidth) / 2;
-  const offsetY = (eh - shownHeight) / 2;
-  const sx = shownWidth / frame.width;
-  const sy = shownHeight / frame.height;
-
-  return (
-    <div className="absolute inset-0 overflow-hidden pointer-events-none">
-      {boxes.map((b, i) => {
-        const { x, y, width, height } = b.bbox;
-        const left = offsetX + (x - width / 2) * sx;
-        const top = offsetY + (y - height / 2) * sy;
-        const color = BEHAVIOR_COLORS[behaviorLabel(b.behavior)] || "#94a3b8";
-        const labelInside = top < LABEL_HEIGHT;
-        return (
-          <div
-            key={i}
-            className="absolute"
-            style={{
-              left,
-              top,
-              width: width * sx,
-              height: height * sy,
-              border: `2px solid ${color}`,
-              background: `${color}14`,
-            }}
-          >
-            <span
-              className="absolute text-xs font-bold px-1 whitespace-nowrap"
-              style={{
-                left: -2,
-                ...(labelInside ? { top: 0 } : { bottom: "100%" }),
-                height: LABEL_HEIGHT,
-                lineHeight: `${LABEL_HEIGHT}px`,
-                background: color,
-                color: "#050d1a",
-              }}
-            >
-              {behaviorLabel(b.behavior)}
-              {formatConfidence(b.confidence)}
-            </span>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-function CameraFeed({ cam, tunnelUrl, boxes }) {
+function CameraFeed({ cam, tunnelUrl }) {
   const videoRef = useRef(null);
   const [status, setStatus] = useState("connecting");
 
@@ -212,7 +102,14 @@ function CameraFeed({ cam, tunnelUrl, boxes }) {
           playsInline
           controls
         />
-        {status === "live" && <BoxOverlay videoRef={videoRef} entry={boxes} />}
+        {status === "live" && (
+          <FrameBoxOverlay
+            camId={cam.id}
+            videoRef={videoRef}
+            socket={socket}
+            apiUrl={api.defaults.baseURL}
+          />
+        )}
         {status !== "live" && (
           <div className="absolute inset-0 flex flex-col items-center justify-center">
             <div className="text-3xl mb-2">📷</div>
@@ -305,8 +202,6 @@ function RecordingTile({ cam }) {
 export default function LiveMonitor() {
   const [tunnelUrl, setTunnelUrl] = useState(null);
   const [selected, setSelected] = useState(null);
-  // { [camera]: { frame, boxes, receivedAt } }, replaced on every event.
-  const [frameBoxes, setFrameBoxes] = useState({});
 
   useEffect(() => {
     api
@@ -315,40 +210,6 @@ export default function LiveMonitor() {
         setTunnelUrl(res.data.url);
       })
       .catch(() => {});
-  }, []);
-
-  useEffect(() => {
-    const onFrameBoxes = (data) => {
-      if (!data || typeof data.camera !== "string") return;
-      setFrameBoxes((prev) => ({
-        ...prev,
-        [data.camera]: {
-          frame: data.frame,
-          boxes: Array.isArray(data.boxes) ? data.boxes : [],
-          receivedAt: Date.now(),
-        },
-      }));
-    };
-    socket.on("frame_boxes", onFrameBoxes);
-
-    // Uses browser receive time, so a skewed Pi clock can't affect expiry.
-    const timer = setInterval(() => {
-      const cutoff = Date.now() - BOX_TTL_MS;
-      setFrameBoxes((prev) => {
-        const stale = Object.keys(prev).filter(
-          (cam) => prev[cam].receivedAt < cutoff,
-        );
-        if (stale.length === 0) return prev;
-        const next = { ...prev };
-        stale.forEach((cam) => delete next[cam]);
-        return next;
-      });
-    }, 5000);
-
-    return () => {
-      socket.off("frame_boxes", onFrameBoxes);
-      clearInterval(timer);
-    };
   }, []);
 
   return (
@@ -435,7 +296,6 @@ export default function LiveMonitor() {
               key={cam.id}
               cam={cam}
               tunnelUrl={tunnelUrl}
-              boxes={frameBoxes[cam.id]}
             />
           ) : (
             <RecordingTile key={cam.id} cam={cam} />
