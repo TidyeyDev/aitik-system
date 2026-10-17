@@ -1,16 +1,41 @@
-import { Link, useLocation } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { useState, useEffect } from "react";
+import { Menu, X } from "lucide-react";
+import {
+  Button,
+  SidebarMenu,
+  SidebarMenuItem,
+  SidebarMenuSection,
+} from "@raydenui/ui";
+import { chartIcon, homeIcon, listIcon, signOutIcon, videoIcon } from "@raydenui/ui/icons";
 import { socket } from "../api/client";
+import { useAuth } from "../context/AuthContext";
 
 const links = [
-  { path: "/", label: "Dashboard" },
-  { path: "/monitor", label: "Live Monitor" },
-  { path: "/detections", label: "Detections" },
-  { path: "/eggs", label: "Egg Quality" },
+  { path: "/", label: "Dashboard", icon: homeIcon },
+  { path: "/monitor", label: "Live Monitor", icon: videoIcon },
+  { path: "/detections", label: "Detections", icon: listIcon },
+  { path: "/eggs", label: "Egg Quality", icon: chartIcon },
 ];
 
+function Brand() {
+  return (
+    <div className="flex items-center gap-3">
+      <span className="text-3xl" aria-hidden="true">
+        🦆
+      </span>
+      <div>
+        <div className="font-heading text-h6 text-grey-900">AI-TIK</div>
+        <div className="text-body-xs text-grey-500">Duck Reproductive Monitoring</div>
+      </div>
+    </div>
+  );
+}
+
 export default function Navbar() {
-  const location = useLocation();
+  const navigate = useNavigate();
+  const { pathname } = useLocation();
+  const { logout } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
   const [connected, setConnected] = useState(socket.connected);
 
@@ -25,102 +50,60 @@ export default function Navbar() {
     };
   }, []);
 
-  const statusDot = connected
-    ? "w-2 h-2 bg-green-400 rounded-full animate-pulse"
-    : "w-2 h-2 bg-red-400 rounded-full";
-  const statusLabel = connected ? "Backend Connected" : "Backend Offline";
+  const handleSelect = (value) => {
+    setMenuOpen(false);
+    if (value === "logout") logout();
+    else navigate(value);
+  };
 
   return (
-    <nav style={{ background: "#0d1b2e", borderBottom: "1px solid #1a3251" }}>
-      <div className="px-4 py-3 flex items-center justify-between">
-        {/* Logo */}
-        <div className="flex items-center gap-2">
-          <span className="text-2xl">🦆</span>
-          <div>
-            <h1 className="text-sm font-bold text-white leading-none">
-              AI-TIK
-            </h1>
-            <p className="text-xs" style={{ color: "#475569" }}>
-              Duck Reproductive Monitoring
-            </p>
-          </div>
-        </div>
-
-        {/* Desktop Nav */}
-        <div className="hidden md:flex items-center gap-1">
-          {links.map((link) => (
-            <Link
-              key={link.path}
-              to={link.path}
-              className="px-3 py-2 rounded-lg text-sm font-medium transition-all"
-              style={{
-                background:
-                  location.pathname === link.path ? "#10b981" : "transparent",
-                color: location.pathname === link.path ? "#fff" : "#64748b",
-              }}
-            >
-              {link.label}
-            </Link>
-          ))}
-        </div>
-
-        {/* Right side */}
-        <div className="flex items-center gap-3">
-          <div className="hidden md:flex items-center gap-2">
-            <span className={statusDot} />
-            <span className="text-xs" style={{ color: "#64748b" }}>
-              {statusLabel}
-            </span>
-          </div>
-
-          {/* Mobile menu button */}
-          <button
-            className="md:hidden p-2 rounded-lg"
-            style={{ background: "#1a3251" }}
-            onClick={() => setMenuOpen(!menuOpen)}
-          >
-            <div className="w-5 h-0.5 bg-white mb-1" />
-            <div className="w-5 h-0.5 bg-white mb-1" />
-            <div className="w-5 h-0.5 bg-white" />
-          </button>
-        </div>
+    <aside className="md:sticky md:top-0 md:h-screen md:p-4 md:shrink-0">
+      {/* Mobile top bar */}
+      <div className="md:hidden flex items-center justify-between px-6 py-4 bg-white border-b border-grey-200">
+        <Brand />
+        <Button
+          variant="grey"
+          appearance="outlined"
+          size="sm"
+          iconPosition="icon-only"
+          icon={menuOpen ? <X size={18} /> : <Menu size={18} />}
+          aria-label={menuOpen ? "Close menu" : "Open menu"}
+          aria-expanded={menuOpen}
+          onClick={() => setMenuOpen(!menuOpen)}
+        />
       </div>
 
-      {/* Mobile Menu */}
-      {menuOpen && (
-        <div
-          className="md:hidden px-4 pb-4"
-          style={{ borderTop: "1px solid #1a3251" }}
-        >
-          <div className="pt-3 space-y-1">
-            {links.map((link) => (
-              <Link
-                key={link.path}
-                to={link.path}
-                onClick={() => setMenuOpen(false)}
-                className="flex items-center px-4 py-3 rounded-xl text-sm font-medium transition-all"
-                style={{
-                  background:
-                    location.pathname === link.path
-                      ? "rgba(16,185,129,0.15)"
-                      : "transparent",
-                  color:
-                    location.pathname === link.path ? "#10b981" : "#94a3b8",
-                  border: `1px solid ${location.pathname === link.path ? "#10b981" : "transparent"}`,
-                }}
-              >
-                {link.label}
-              </Link>
-            ))}
-            <div className="flex items-center gap-2 px-4 py-3">
-              <span className={statusDot} />
-              <span className="text-xs" style={{ color: "#64748b" }}>
-                {statusLabel}
-              </span>
-            </div>
-          </div>
+      <SidebarMenu
+        value={pathname}
+        onValueChange={handleSelect}
+        className={`${menuOpen ? "flex" : "hidden"} md:flex w-full md:w-[272px] md:h-full rounded-none md:rounded-xl border-b md:border border-grey-200 md:shadow-soft-xs`}
+      >
+        <div className="hidden md:block px-2 pb-2">
+          <Brand />
         </div>
-      )}
-    </nav>
+
+        <SidebarMenuSection title="MAIN MENU">
+          {links.map((link) => (
+            <SidebarMenuItem key={link.path} value={link.path} icon={link.icon}>
+              {link.label}
+            </SidebarMenuItem>
+          ))}
+        </SidebarMenuSection>
+
+        <div className="mt-auto space-y-3">
+          <div className="flex items-center gap-2 px-3 text-body-xs text-grey-500">
+            <span
+              className={`w-2 h-2 rounded-full ${connected ? "bg-success-400 animate-pulse" : "bg-error-400"}`}
+            />
+            {connected ? "Backend connected" : "Backend offline"}
+          </div>
+          <SidebarMenuSection>
+            <SidebarMenuItem value="logout" icon={signOutIcon}>
+              Log out
+            </SidebarMenuItem>
+          </SidebarMenuSection>
+        </div>
+      </SidebarMenu>
+    </aside>
   );
 }

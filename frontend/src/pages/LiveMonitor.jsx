@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { Alert, Badge, Card, CardHeader } from "@raydenui/ui";
 import { api, socket } from "../api/client";
 import FrameBoxOverlay from "../components/FrameBoxOverlay";
 
@@ -11,7 +12,33 @@ const cameras = [
   { id: "cam4", label: "Camera 4", position: "West", mode: "live" },
 ];
 
-const RECORDING_COLOR = "#818cf8";
+const STATUS_BADGE = {
+  live: { color: "success", label: "Live" },
+  connecting: { color: "warning", label: "Connecting" },
+  offline: { color: "error", label: "Offline" },
+  recording: { color: "blue", label: "Recording" },
+};
+
+function CameraCard({ cam, status, footer, children }) {
+  const badge = STATUS_BADGE[status];
+  return (
+    <Card shadow="md">
+      <CardHeader
+        title={cam.label}
+        subtitle={`${cam.position} angle`}
+        actions={<Badge color={badge.color}>{badge.label}</Badge>}
+        bordered
+      />
+      <div className="relative bg-grey-900" style={{ aspectRatio: "16/9" }}>
+        {children}
+      </div>
+      <div className="flex items-center justify-between px-6 py-3 text-body-xs text-grey-500">
+        <div className="flex gap-3">{footer}</div>
+        <span>Turentigue Farm</span>
+      </div>
+    </Card>
+  );
+}
 
 function CameraFeed({ cam, tunnelUrl }) {
   const videoRef = useRef(null);
@@ -46,162 +73,74 @@ function CameraFeed({ cam, tunnelUrl }) {
     }
   }, [cam.id, tunnelUrl]);
 
-  const statusColor =
-    status === "live"
-      ? "#10b981"
-      : status === "connecting"
-        ? "#f59e0b"
-        : "#f43f5e";
-  const statusLabel =
-    status === "live"
-      ? "LIVE"
-      : status === "connecting"
-        ? "CONNECTING"
-        : "OFFLINE";
-
   return (
-    <div
-      className="rounded-xl overflow-hidden"
-      style={{ background: "#0d1b2e", border: "1px solid #1a3251" }}
-    >
-      {/* Camera Header */}
-      <div
-        className="flex items-center justify-between px-4 py-3"
-        style={{ borderBottom: "1px solid #1a3251" }}
-      >
-        <div className="flex items-center gap-3">
-          <div
-            className="w-2 h-2 rounded-full animate-pulse"
-            style={{ background: statusColor }}
-          />
-          <div>
-            <div className="text-sm font-medium text-white">{cam.label}</div>
-            <div className="text-xs" style={{ color: "#475569" }}>
-              {cam.position} angle
-            </div>
-          </div>
-        </div>
-        <span
-          className="text-xs font-bold px-2 py-0.5 rounded"
-          style={{ background: `${statusColor}20`, color: statusColor }}
-        >
-          ● {statusLabel}
-        </span>
-      </div>
-
-      {/* Video */}
-      <div
-        className="relative"
-        style={{ background: "#050d1a", aspectRatio: "16/9" }}
-      >
-        <video
-          ref={videoRef}
-          className="w-full h-full object-contain"
-          autoPlay
-          muted
-          playsInline
-          controls
-        />
-        {status === "live" && (
-          <FrameBoxOverlay
-            camId={cam.id}
-            videoRef={videoRef}
-            socket={socket}
-            apiUrl={api.defaults.baseURL}
-          />
-        )}
-        {status !== "live" && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center">
-            <div className="text-3xl mb-2">📷</div>
-            <div className="text-sm font-medium" style={{ color: statusColor }}>
-              {status === "connecting"
-                ? "Connecting to stream..."
-                : "Stream offline"}
-            </div>
-            <div className="text-xs mt-1" style={{ color: "#475569" }}>
-              {cam.label} — {cam.position}
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Camera Footer */}
-      <div className="flex items-center justify-between px-4 py-2">
-        <div className="flex gap-3 text-xs" style={{ color: "#475569" }}>
+    <CameraCard
+      cam={cam}
+      status={status}
+      footer={
+        <>
           <span>640×480</span>
           <span>15 FPS</span>
           <span>H.264</span>
+        </>
+      }
+    >
+      <video
+        ref={videoRef}
+        className="w-full h-full object-contain"
+        autoPlay
+        muted
+        playsInline
+        controls
+      />
+      {status === "live" && (
+        <FrameBoxOverlay
+          camId={cam.id}
+          videoRef={videoRef}
+          socket={socket}
+          apiUrl={api.defaults.baseURL}
+        />
+      )}
+      {status !== "live" && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center text-center p-6">
+          <div className="text-body-md font-medium text-white">
+            {status === "connecting" ? "Connecting to stream…" : "Stream offline"}
+          </div>
+          <div className="text-body-xs text-grey-400 mt-1">
+            {cam.label} — {cam.position}
+          </div>
         </div>
-        <span className="text-xs" style={{ color: "#334155" }}>
-          Turentigue Farm
-        </span>
-      </div>
-    </div>
+      )}
+    </CameraCard>
   );
 }
 
 function RecordingTile({ cam }) {
   return (
-    <div
-      className="rounded-xl overflow-hidden"
-      style={{ background: "#0d1b2e", border: "1px solid #1a3251" }}
+    <CameraCard
+      cam={cam}
+      status="recording"
+      footer={
+        <>
+          <span>10-min clips</span>
+          <span>Telegram</span>
+        </>
+      }
     >
-      {/* Camera Header */}
-      <div
-        className="flex items-center justify-between px-4 py-3"
-        style={{ borderBottom: "1px solid #1a3251" }}
-      >
-        <div className="flex items-center gap-3">
-          <div
-            className="w-2 h-2 rounded-full"
-            style={{ background: RECORDING_COLOR }}
-          />
-          <div>
-            <div className="text-sm font-medium text-white">{cam.label}</div>
-            <div className="text-xs" style={{ color: "#475569" }}>
-              {cam.position} angle
-            </div>
-          </div>
-        </div>
-        <span
-          className="text-xs font-bold px-2 py-0.5 rounded"
-          style={{ background: `${RECORDING_COLOR}20`, color: RECORDING_COLOR }}
-        >
-          ● RECORDING
-        </span>
-      </div>
-
-      {/* Placeholder in place of video */}
-      <div
-        className="relative flex flex-col items-center justify-center"
-        style={{ background: "#050d1a", aspectRatio: "16/9" }}
-      >
-        <div className="text-3xl mb-2">🎞️</div>
-        <div className="text-sm font-medium" style={{ color: RECORDING_COLOR }}>
+      <div className="absolute inset-0 flex flex-col items-center justify-center text-center p-6">
+        <div className="text-body-md font-medium text-white">
           Recording — clips sent via Telegram
         </div>
-        <div className="text-xs mt-1" style={{ color: "#475569" }}>
+        <div className="text-body-xs text-grey-400 mt-1">
           {cam.label} — {cam.position} · not streamed live
         </div>
       </div>
-
-      {/* Camera Footer */}
-      <div className="flex items-center justify-between px-4 py-2">
-        <div className="flex gap-3 text-xs" style={{ color: "#475569" }}>
-          <span>10-min clips</span>
-          <span>Telegram</span>
-        </div>
-        <span className="text-xs" style={{ color: "#334155" }}>
-          Turentigue Farm
-        </span>
-      </div>
-    </div>
+    </CameraCard>
   );
 }
 
 export default function LiveMonitor() {
   const [tunnelUrl, setTunnelUrl] = useState(null);
-  const [selected, setSelected] = useState(null);
 
   useEffect(() => {
     api
@@ -213,119 +152,58 @@ export default function LiveMonitor() {
   }, []);
 
   return (
-    <div className="max-w-7xl mx-auto" style={{ color: "#e2e8f0" }}>
-      {/* Header */}
-      <div className="flex items-start justify-between mb-6">
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-start justify-between gap-6">
         <div>
-          <h2 className="text-2xl font-bold text-white">Live Monitor</h2>
-          <p className="text-sm mt-1" style={{ color: "#64748b" }}>
+          <h1 className="font-heading text-h4 text-grey-900">Live Monitor</h1>
+          <p className="text-body-md text-grey-700 mt-1">
             Real-time camera feeds — Turentigue Farm, Morong, Rizal
           </p>
         </div>
-        <div
-          className="flex items-center gap-2 px-3 py-2 rounded-lg"
-          style={{ background: "#0d1b2e", border: "1px solid #1a3251" }}
-        >
-          <span
-            className="w-2 h-2 rounded-full animate-pulse"
-            style={{ background: tunnelUrl ? "#10b981" : "#f59e0b" }}
-          />
-          <span
-            className="text-xs"
-            style={{ color: tunnelUrl ? "#10b981" : "#f59e0b" }}
-          >
-            {tunnelUrl ? "Stream server connected" : "Connecting..."}
-          </span>
-        </div>
+        <Badge color={tunnelUrl ? "success" : "warning"} size="lg">
+          {tunnelUrl ? "Stream server connected" : "Connecting…"}
+        </Badge>
       </div>
 
-      {/* Camera Status Bar */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-        {cameras.map((cam) => (
-          <button
-            key={cam.id}
-            onClick={() => setSelected(selected === cam.id ? null : cam.id)}
-            className="rounded-xl p-4 flex items-center gap-3 transition-all text-left"
-            style={{
-              background:
-                selected === cam.id ? "rgba(16,185,129,0.1)" : "#0d1b2e",
-              border: `1px solid ${selected === cam.id ? "#10b981" : "#1a3251"}`,
-            }}
-          >
-            <span
-              className={`w-2 h-2 rounded-full ${cam.mode === "live" ? "animate-pulse" : ""}`}
-              style={{
-                background: cam.mode === "live" ? "#10b981" : RECORDING_COLOR,
-              }}
-            />
-            <div>
-              <div className="text-sm font-medium text-white">{cam.label}</div>
-              <div className="text-xs" style={{ color: "#475569" }}>
-                {cam.position}
-                {cam.mode === "recording" && " · Recording only"}
-              </div>
-            </div>
-          </button>
-        ))}
-      </div>
-
-      {/* Camera Grid */}
       {/* Recording tiles don't depend on the stream server, so the grid
           renders straight away; live feeds wait in their "connecting" state
           until the tunnel URL arrives. */}
       {!tunnelUrl && (
-        <div
-          className="rounded-xl px-4 py-3 mb-4 flex items-center gap-3"
-          style={{ background: "#0d1b2e", border: "1px solid #1a3251" }}
-        >
-          <span className="text-xl">📡</span>
-          <div>
-            <div className="text-sm font-medium text-white">
-              Connecting to stream server
-            </div>
-            <div className="text-xs" style={{ color: "#475569" }}>
-              Make sure the Pi is online and streaming service is running
-            </div>
-          </div>
-        </div>
+        <Alert
+          state="information"
+          title="Connecting to stream server"
+          description="Make sure the Pi is online and the streaming service is running."
+        />
       )}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {cameras.map((cam) =>
           cam.mode === "live" ? (
-            <CameraFeed
-              key={cam.id}
-              cam={cam}
-              tunnelUrl={tunnelUrl}
-            />
+            <CameraFeed key={cam.id} cam={cam} tunnelUrl={tunnelUrl} />
           ) : (
             <RecordingTile key={cam.id} cam={cam} />
           ),
         )}
       </div>
 
-      {/* System Info */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6">
-        {[
-          { label: "Recording Mode", value: "24/7 Continuous" },
-          { label: "Clip Duration", value: "10 minutes" },
-          { label: "Upload Channel", value: "Telegram" },
-          { label: "Storage Policy", value: "Auto-delete 2hr" },
-        ].map((info) => (
-          <div
-            key={info.label}
-            className="rounded-xl p-4"
-            style={{ background: "#0d1b2e", border: "1px solid #1a3251" }}
-          >
-            <div
-              className="text-xs mb-1 tracking-widest uppercase"
-              style={{ color: "#475569" }}
-            >
-              {info.label}
+      <Card shadow="md">
+        <CardHeader title="Recording setup" bordered />
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-6 p-6">
+          {[
+            { label: "Recording mode", value: "24/7 continuous" },
+            { label: "Clip duration", value: "10 minutes" },
+            { label: "Upload channel", value: "Telegram" },
+            { label: "Storage policy", value: "Auto-delete after 2 hr" },
+          ].map((info) => (
+            <div key={info.label}>
+              <div className="text-body-xs text-grey-500">{info.label}</div>
+              <div className="text-body-sm font-medium text-grey-800 mt-1">
+                {info.value}
+              </div>
             </div>
-            <div className="text-sm font-medium text-white">{info.value}</div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      </Card>
     </div>
   );
 }

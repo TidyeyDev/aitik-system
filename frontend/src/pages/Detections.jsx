@@ -1,17 +1,29 @@
 import { useState, useEffect } from "react";
+import {
+  Badge,
+  ButtonGroup,
+  ButtonGroupItem,
+  Card,
+  CardHeader,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@raydenui/ui";
 import { api, socket } from "../api/client";
 import SnapshotImage from "../components/SnapshotImage";
 import { useTunnelUrl } from "../api/useTunnelUrl";
-import { behaviorLabel, isBehavior } from "../behavior";
+import {
+  BEHAVIOR_HEX,
+  behaviorBadgeColor,
+  behaviorLabel,
+  formatConfidence,
+  isBehavior,
+} from "../behavior";
 
-const BEHAVIOR_COLORS = {
-  Receptive: "#10b981",
-  Mating: "#818cf8",
-  Neutral: "#f59e0b",
-  "Non-receptive": "#f43f5e",
-};
-
-const behaviors = ["All", "Receptive", "Mating", "Neutral", "Non-receptive"];
+const behaviors = ["All", ...Object.keys(BEHAVIOR_HEX)];
 
 export default function Detections() {
   const [filter, setFilter] = useState("All");
@@ -35,213 +47,92 @@ export default function Detections() {
     };
   }, []);
 
+  const countOf = (b) =>
+    b === "All"
+      ? detections.length
+      : detections.filter((d) => isBehavior(d.behavior, b)).length;
+
   const filtered =
     filter === "All"
       ? detections
       : detections.filter((d) => isBehavior(d.behavior, filter));
 
-  const counts = {
-    Receptive: detections.filter((d) => isBehavior(d.behavior, "Receptive")).length,
-    Mating: detections.filter((d) => isBehavior(d.behavior, "Mating")).length,
-    Neutral: detections.filter((d) => isBehavior(d.behavior, "Neutral")).length,
-    "Non-receptive": detections.filter((d) => isBehavior(d.behavior, "Non-receptive"))
-      .length,
-  };
-
   return (
-    <div className="max-w-7xl mx-auto" style={{ color: "#e2e8f0" }}>
-      {/* Header */}
-      <div className="mb-6">
-        <h2 className="text-2xl font-bold text-white">Detections</h2>
-        <p className="text-sm mt-1" style={{ color: "#64748b" }}>
-          Behavioral detection log — Objective 2. The model classifies behavior
-          only; each detection is saved with a snapshot.
+    <div className="space-y-6">
+      <div>
+        <h1 className="font-heading text-h4 text-grey-900">Detections</h1>
+        <p className="text-body-md text-grey-700 mt-1">
+          Behavioral detection log — Objective 2. The model classifies behavior only;
+          each detection is saved with a snapshot.
         </p>
       </div>
 
-      {/* Summary Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-        {Object.entries(counts).map(([behavior, count]) => (
-          <div
-            key={behavior}
-            onClick={() => setFilter(behavior)}
-            className="rounded-xl p-4 cursor-pointer transition-all"
-            style={{
-              background:
-                filter === behavior
-                  ? `${BEHAVIOR_COLORS[behavior]}20`
-                  : "#0d1b2e",
-              border: `1px solid ${filter === behavior ? BEHAVIOR_COLORS[behavior] : "#1a3251"}`,
-              boxShadow:
-                filter === behavior
-                  ? `0 0 20px ${BEHAVIOR_COLORS[behavior]}20`
-                  : "none",
-            }}
-          >
-            <div className="flex items-center gap-2 mb-2">
-              <span
-                className="w-2 h-2 rounded-full"
-                style={{ background: BEHAVIOR_COLORS[behavior] }}
-              />
-              <span className="text-xs" style={{ color: "#64748b" }}>
-                {behavior}
-              </span>
-            </div>
-            <div
-              className="text-3xl font-bold"
-              style={{ color: BEHAVIOR_COLORS[behavior] }}
-            >
-              {count}
-            </div>
-            <div className="text-xs mt-1" style={{ color: "#475569" }}>
-              detections
-            </div>
-          </div>
-        ))}
+      <div className="overflow-x-auto">
+        <ButtonGroup>
+          {behaviors.map((b) => (
+            <ButtonGroupItem key={b} active={filter === b} onClick={() => setFilter(b)}>
+              {b} ({countOf(b)})
+            </ButtonGroupItem>
+          ))}
+        </ButtonGroup>
       </div>
 
-      {/* Filter Tabs */}
-      <div className="flex gap-2 mb-6 flex-wrap">
-        {behaviors.map((b) => (
-          <button
-            key={b}
-            onClick={() => setFilter(b)}
-            className="px-4 py-2 rounded-lg text-sm font-medium transition-all"
-            style={{
-              background:
-                filter === b
-                  ? b === "All"
-                    ? "#1e3a5f"
-                    : `${BEHAVIOR_COLORS[b]}20`
-                  : "#0d1b2e",
-              color:
-                filter === b
-                  ? b === "All"
-                    ? "#e2e8f0"
-                    : BEHAVIOR_COLORS[b]
-                  : "#64748b",
-              border: `1px solid ${filter === b ? (b === "All" ? "#1e3a5f" : BEHAVIOR_COLORS[b]) : "#1a3251"}`,
-            }}
-          >
-            {b}
-            {b !== "All" && (
-              <span className="ml-2 text-xs opacity-70">{counts[b] || 0}</span>
-            )}
-          </button>
-        ))}
-      </div>
-
-      {/* Table */}
-      <div
-        className="rounded-xl overflow-hidden"
-        style={{ background: "#0d1b2e", border: "1px solid #1a3251" }}
-      >
-        <div
-          className="flex items-center justify-between px-6 py-4"
-          style={{ borderBottom: "1px solid #1a3251" }}
-        >
-          <h3
-            className="text-sm font-semibold tracking-widest uppercase"
-            style={{ color: "#94a3b8" }}
-          >
-            Detection Log
-          </h3>
-          <span
-            className="text-xs px-2 py-1 rounded-full"
-            style={{ background: "#1a3251", color: "#64748b" }}
-          >
-            {filtered.length} records
-          </span>
-        </div>
-
+      <Card shadow="md">
+        <CardHeader
+          title="Detection log"
+          actions={<Badge color="neutral">{filtered.length} records</Badge>}
+          bordered
+        />
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr style={{ borderBottom: "1px solid #1a3251" }}>
-                {[
-                  "Snapshot",
-                  "Behavior",
-                  "Confidence",
-                  "Camera",
-                  "Time",
-                ].map(
-                  (h) => (
-                    <th
-                      key={h}
-                      className="text-left px-6 py-3 text-xs tracking-widest uppercase"
-                      style={{ color: "#475569" }}
-                    >
-                      {h}
-                    </th>
-                  ),
-                )}
-              </tr>
-            </thead>
-            <tbody>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Snapshot</TableHead>
+                <TableHead>Behavior</TableHead>
+                <TableHead>Confidence</TableHead>
+                <TableHead>Camera</TableHead>
+                <TableHead>Time</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {filtered.length === 0 && (
-                <tr>
-                  <td
-                    colSpan={5}
-                    className="px-6 py-10 text-center text-sm"
-                    style={{ color: "#475569" }}
-                  >
+                <TableRow>
+                  <TableCell colSpan={5} className="py-10 text-center text-grey-500">
                     No detections yet — awaiting YOLO model deployment
-                  </td>
-                </tr>
+                  </TableCell>
+                </TableRow>
               )}
               {filtered.map((d, i) => (
-                <tr
-                  key={i}
-                  style={{ borderBottom: "1px solid #0d1b2e" }}
-                  onMouseEnter={(e) =>
-                    (e.currentTarget.style.background = "#111827")
-                  }
-                  onMouseLeave={(e) =>
-                    (e.currentTarget.style.background = "transparent")
-                  }
-                >
-                  <td className="px-6 py-4">
+                <TableRow key={d.id ?? i}>
+                  <TableCell>
                     {d.snapshot ? (
                       <SnapshotImage
                         snapshot={d.snapshot}
                         tunnelUrl={tunnelUrl}
                         alt={`${behaviorLabel(d.behavior)} snapshot`}
-                        className="w-40 rounded"
+                        className="w-40 aspect-video rounded-md"
                         link
                       />
                     ) : (
-                      <span className="text-xs" style={{ color: "#475569" }}>
-                        None
-                      </span>
+                      <span className="text-grey-500">None</span>
                     )}
-                  </td>
-                  <td className="px-6 py-4">
-                    <span
-                      className="px-2 py-1 rounded-full text-xs font-semibold"
-                      style={{
-                        background: `${BEHAVIOR_COLORS[behaviorLabel(d.behavior)]}20`,
-                        color: BEHAVIOR_COLORS[behaviorLabel(d.behavior)],
-                        border: `1px solid ${BEHAVIOR_COLORS[behaviorLabel(d.behavior)]}40`,
-                      }}
-                    >
+                  </TableCell>
+                  <TableCell>
+                    <Badge color={behaviorBadgeColor(d.behavior)} size="sm">
                       {behaviorLabel(d.behavior)}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4" style={{ color: "#94a3b8" }}>
-                    {d.confidence}
-                  </td>
-                  <td className="px-6 py-4" style={{ color: "#94a3b8" }}>
-                     {d.camera}
-                  </td>
-                  <td className="px-6 py-4" style={{ color: "#475569" }}>
+                    </Badge>
+                  </TableCell>
+                  <TableCell>{formatConfidence(d.confidence)}</TableCell>
+                  <TableCell>{d.camera}</TableCell>
+                  <TableCell className="whitespace-nowrap">
                     {new Date(d.timestamp).toLocaleString()}
-                  </td>
-                </tr>
+                  </TableCell>
+                </TableRow>
               ))}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
         </div>
-      </div>
+      </Card>
     </div>
   );
 }

@@ -16,8 +16,7 @@ export default function SnapshotImage({ snapshot, tunnelUrl, alt, className, lin
   if (src === undefined || src === null || failedSrc === src) {
     return (
       <div
-        className={`${className} flex items-center justify-center text-xs text-center`}
-        style={{ color: "#475569", background: "#0a1628" }}
+        className={`${className} flex items-center justify-center text-body-xs text-center text-grey-500 bg-grey-100`}
       >
         {src === undefined ? "Loading…" : "Snapshot unavailable"}
       </div>

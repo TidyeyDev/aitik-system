@@ -1,34 +1,42 @@
 import { useState, useEffect } from "react";
+import { Trash2 } from "lucide-react";
+import {
+  Badge,
+  Button,
+  Card,
+  CardBody,
+  CardHeader,
+  Input,
+  MetricsCard,
+  Select,
+  SelectOption,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@raydenui/ui";
+import { plusIcon } from "@raydenui/ui/icons";
 import { api } from "../api/client";
+import { BEHAVIOR_HEX, behaviorBadgeColor } from "../behavior";
 
-const BEHAVIOR_COLORS = {
-  Receptive: "#10b981",
-  Neutral: "#f59e0b",
-  "Non-receptive": "#f43f5e",
-};
+const EGG_BEHAVIORS = ["Receptive", "Neutral", "Non-receptive"];
 
 // Size category is calculated by the backend (server.js eggSizeCategory);
-// the page only maps the stored label to a color.
+// the page only maps the stored label to a badge colour.
 const SIZE_COLORS = {
-  Jumbo: "#818cf8",
-  Large: "#10b981",
-  Medium: "#f59e0b",
-  Small: "#f43f5e",
+  Jumbo: "blue",
+  Large: "success",
+  Medium: "warning",
+  Small: "error",
 };
 
-const sizeOf = (record) => ({
-  label: record.sizeCategory ?? "—",
-  color: SIZE_COLORS[record.sizeCategory] ?? "#64748b",
-});
+const EMPTY_FORM = { duck: "", behavior: "Receptive", weight: "", date: "" };
 
 export default function EggQuality() {
   const [data, setData] = useState([]);
-  const [form, setForm] = useState({
-    duck: "",
-    behavior: "Receptive",
-    weight: "",
-    date: "",
-  });
+  const [form, setForm] = useState(EMPTY_FORM);
   const [showForm, setShowForm] = useState(false);
   const [loadState, setLoadState] = useState("loading");
   const [saving, setSaving] = useState(false);
@@ -54,16 +62,13 @@ export default function EggQuality() {
         ? "Couldn't load records from the backend"
         : "No records yet";
 
-  const receptive = data.filter((d) => d.behavior === "Receptive");
-  const nonReceptive = data.filter((d) => d.behavior === "Non-receptive");
-  const neutral = data.filter((d) => d.behavior === "Neutral");
-
   const avg = (arr) =>
     arr.length
       ? (arr.reduce((s, d) => s + d.weight, 0) / arr.length).toFixed(1)
       : "—";
 
-  const handleAdd = () => {
+  const handleAdd = (e) => {
+    e.preventDefault();
     if (!form.duck.trim() || !form.weight || !form.date) {
       setSaveError("Fill in duck, weight and date.");
       return;
@@ -74,11 +79,9 @@ export default function EggQuality() {
       .post("/eggs", { ...form, weight: parseFloat(form.weight) })
       .then((res) => {
         setData((prev) =>
-          [...prev, res.data.record].sort((a, b) =>
-            a.date.localeCompare(b.date),
-          ),
+          [...prev, res.data.record].sort((a, b) => a.date.localeCompare(b.date)),
         );
-        setForm({ duck: "", behavior: "Receptive", weight: "", date: "" });
+        setForm(EMPTY_FORM);
         setShowForm(false);
       })
       .catch((err) =>
@@ -114,406 +117,239 @@ export default function EggQuality() {
   const maxWeight = Math.max(...data.map((d) => d.weight));
 
   return (
-    <div className="max-w-7xl mx-auto" style={{ color: "#e2e8f0" }}>
-      {/* Header */}
-      <div className="flex items-start justify-between mb-6">
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-start justify-between gap-6">
         <div>
-          <h2 className="text-2xl font-bold text-white">Egg Quality</h2>
-          <p className="text-sm mt-1" style={{ color: "#64748b" }}>
-            Correlation of reproductive receptivity with egg weight — Objective
-            3
+          <h1 className="font-heading text-h4 text-grey-900">Egg Quality</h1>
+          <p className="text-body-md text-grey-700 mt-1">
+            Correlation of reproductive receptivity with egg weight — Objective 3
           </p>
         </div>
-        <button
-          onClick={() => setShowForm(!showForm)}
-          className="px-4 py-2 rounded-lg text-sm font-medium transition-all"
-          style={{ background: "#10b981", color: "#fff" }}
-        >
-          + Record Egg
-        </button>
-      </div>
-
-      {/* Add Form */}
-      {showForm && (
-        <div
-          className="rounded-xl p-6 mb-6"
-          style={{ background: "#0d1b2e", border: "1px solid #1a3251" }}
-        >
-          <h3
-            className="text-sm font-semibold tracking-widest uppercase mb-4"
-            style={{ color: "#94a3b8" }}
-          >
-            New Egg Record
-          </h3>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div>
-              <label
-                className="text-xs mb-1 block"
-                style={{ color: "#475569" }}
-              >
-                Duck
-              </label>
-              <input
-                value={form.duck}
-                onChange={(e) => setForm({ ...form, duck: e.target.value })}
-                placeholder="e.g. Duck 1"
-                className="w-full rounded-lg px-3 py-2 text-sm text-white"
-                style={{ background: "#111827", border: "1px solid #1a3251" }}
-              />
-            </div>
-            <div>
-              <label
-                className="text-xs mb-1 block"
-                style={{ color: "#475569" }}
-              >
-                Behavior Class
-              </label>
-              <select
-                value={form.behavior}
-                onChange={(e) => setForm({ ...form, behavior: e.target.value })}
-                className="w-full rounded-lg px-3 py-2 text-sm text-white"
-                style={{ background: "#111827", border: "1px solid #1a3251" }}
-              >
-                <option>Receptive</option>
-                <option>Neutral</option>
-                <option>Non-receptive</option>
-              </select>
-            </div>
-            <div>
-              <label
-                className="text-xs mb-1 block"
-                style={{ color: "#475569" }}
-              >
-                Weight (grams)
-              </label>
-              <input
-                value={form.weight}
-                onChange={(e) => setForm({ ...form, weight: e.target.value })}
-                placeholder="e.g. 65"
-                type="number"
-                className="w-full rounded-lg px-3 py-2 text-sm text-white"
-                style={{ background: "#111827", border: "1px solid #1a3251" }}
-              />
-            </div>
-            <div>
-              <label
-                className="text-xs mb-1 block"
-                style={{ color: "#475569" }}
-              >
-                Date
-              </label>
-              <input
-                value={form.date}
-                onChange={(e) => setForm({ ...form, date: e.target.value })}
-                type="date"
-                className="w-full rounded-lg px-3 py-2 text-sm text-white"
-                style={{ background: "#111827", border: "1px solid #1a3251" }}
-              />
-            </div>
-          </div>
-          <div className="flex gap-3 mt-4">
-            <button
-              onClick={handleAdd}
-              disabled={saving}
-              className="px-5 py-2 rounded-lg text-sm font-medium"
-              style={{ background: "#10b981", color: "#fff" }}
-            >
-              {saving ? "Saving…" : "Save Record"}
-            </button>
-            <button
-              onClick={() => setShowForm(false)}
-              className="px-5 py-2 rounded-lg text-sm font-medium"
-              style={{ background: "#1a3251", color: "#94a3b8" }}
-            >
-              Cancel
-            </button>
-          </div>
-          {saveError && (
-            <p className="text-xs mt-3" style={{ color: "#f43f5e" }}>
-              {saveError}
-            </p>
-          )}
-        </div>
-      )}
-
-      {/* Average Weight Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-        {[
-          { label: "Receptive", data: receptive, color: "#10b981" },
-          { label: "Neutral", data: neutral, color: "#f59e0b" },
-          { label: "Non-receptive", data: nonReceptive, color: "#f43f5e" },
-        ].map(({ label, data: d, color }) => (
-          <div
-            key={label}
-            className="rounded-xl p-5"
-            style={{ background: "#0d1b2e", border: `1px solid ${color}30` }}
-          >
-            <div className="flex items-center gap-2 mb-3">
-              <span
-                className="w-2 h-2 rounded-full"
-                style={{ background: color }}
-              />
-              <span
-                className="text-xs tracking-widest uppercase"
-                style={{ color: "#64748b" }}
-              >
-                {label}
-              </span>
-            </div>
-            <div className="text-4xl font-bold mb-1" style={{ color }}>
-              {d.length ? `${avg(d)}g` : "—"}
-            </div>
-            <div className="text-xs" style={{ color: "#475569" }}>
-              avg weight · {d.length} eggs
-            </div>
-            {/* Mini bar */}
-            <div
-              className="mt-3 h-1 rounded-full"
-              style={{ background: "#1a3251" }}
-            >
-              <div
-                className="h-1 rounded-full"
-                style={{
-                  background: color,
-                  width: d.length
-                    ? `${Math.min((parseFloat(avg(d)) / 75) * 100, 100)}%`
-                    : "0%",
-                }}
-              />
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {/* Egg Weight Visual */}
-      <div
-        className="rounded-xl p-6 mb-6"
-        style={{ background: "#0d1b2e", border: "1px solid #1a3251" }}
-      >
-        <h3
-          className="text-sm font-semibold tracking-widest uppercase mb-1"
-          style={{ color: "#94a3b8" }}
-        >
-          Egg Weight by Duck
-        </h3>
-        <p className="text-xs mb-5" style={{ color: "#475569" }}>
-          Visual comparison — PNS/BAFS 321:2021 size categories
-        </p>
-        {data.length === 0 ? (
-          <div className="text-center py-8">
-            <div className="text-sm" style={{ color: "#475569" }}>
-              {emptyMessage}
-            </div>
-            {loadState === "ready" && (
-              <div className="text-xs mt-1" style={{ color: "#334155" }}>
-                Use "+ Record Egg" to add egg weight data
-              </div>
-            )}
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {data.map((d) => {
-              const color = BEHAVIOR_COLORS[d.behavior];
-              const size = sizeOf(d);
-              const pct = (d.weight / maxWeight) * 100;
-              return (
-                <div key={d.id} className="flex items-center gap-4">
-                  <div
-                    className="w-16 text-xs text-right"
-                    style={{ color: "#94a3b8" }}
-                  >
-                    {d.duck}
-                  </div>
-                  <div
-                    className="flex-1 h-6 rounded-lg overflow-hidden"
-                    style={{ background: "#111827" }}
-                  >
-                    <div
-                      className="h-6 rounded-lg flex items-center px-2 transition-all"
-                      style={{
-                        width: `${pct}%`,
-                        background: `${color}30`,
-                        border: `1px solid ${color}50`,
-                      }}
-                    >
-                      <span className="text-xs font-bold" style={{ color }}>
-                        {d.weight}g
-                      </span>
-                    </div>
-                  </div>
-                  <div className="w-16 text-xs" style={{ color: size.color }}>
-                    {size.label}
-                  </div>
-                  <div
-                    className="w-20 text-xs text-center px-2 py-0.5 rounded-full"
-                    style={{
-                      background: `${color}15`,
-                      color,
-                      border: `1px solid ${color}30`,
-                    }}
-                  >
-                    {d.behavior === "Non-receptive" ? "Non-rec" : d.behavior}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+        {!showForm && (
+          <Button variant="primary" icon={plusIcon} iconPosition="leading" onClick={() => setShowForm(true)}>
+            Record egg
+          </Button>
         )}
       </div>
 
-      {/* Table */}
-      <div
-        className="rounded-xl overflow-hidden"
-        style={{ background: "#0d1b2e", border: "1px solid #1a3251" }}
-      >
-        <div
-          className="px-6 py-4"
-          style={{ borderBottom: "1px solid #1a3251" }}
-        >
-          <h3
-            className="text-sm font-semibold tracking-widest uppercase"
-            style={{ color: "#94a3b8" }}
-          >
-            Egg Weight Records
-          </h3>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr style={{ borderBottom: "1px solid #1a3251" }}>
-                {[
-                  "Duck",
-                  "Behavior",
-                  "Weight",
-                  "Size Category",
-                  "Date",
-                  "",
-                ].map((h) => (
-                  <th
-                    key={h}
-                    className="text-left px-6 py-3 text-xs tracking-widest uppercase"
-                    style={{ color: "#475569" }}
-                  >
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {data.length === 0 && (
-                <tr>
-                  <td
-                    colSpan={6}
-                    className="px-6 py-10 text-center text-sm"
-                    style={{ color: "#475569" }}
-                  >
-                    {emptyMessage}
-                  </td>
-                </tr>
+      {showForm && (
+        <Card shadow="md">
+          <CardHeader title="New egg record" bordered />
+          <CardBody className="p-6">
+            <form onSubmit={handleAdd} className="space-y-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <Input
+                  label="Duck"
+                  value={form.duck}
+                  onChange={(e) => setForm({ ...form, duck: e.target.value })}
+                  placeholder="e.g. Duck 1"
+                />
+                <Select
+                  label="Behavior class"
+                  value={form.behavior}
+                  onValueChange={(behavior) => setForm({ ...form, behavior })}
+                >
+                  {EGG_BEHAVIORS.map((b) => (
+                    <SelectOption key={b} value={b}>
+                      {b}
+                    </SelectOption>
+                  ))}
+                </Select>
+                <Input
+                  label="Weight (grams)"
+                  type="number"
+                  inputMode="decimal"
+                  value={form.weight}
+                  onChange={(e) => setForm({ ...form, weight: e.target.value })}
+                  placeholder="e.g. 65"
+                />
+                <Input
+                  label="Date"
+                  type="date"
+                  value={form.date}
+                  onChange={(e) => setForm({ ...form, date: e.target.value })}
+                />
+              </div>
+              {saveError && <p className="text-body-sm text-error-600">{saveError}</p>}
+              <div className="flex gap-3">
+                <Button type="submit" variant="primary" disabled={saving}>
+                  {saving ? "Saving…" : "Save record"}
+                </Button>
+                <Button
+                  type="button"
+                  variant="grey"
+                  appearance="outlined"
+                  onClick={() => {
+                    setShowForm(false);
+                    setSaveError(null);
+                  }}
+                >
+                  Cancel
+                </Button>
+              </div>
+            </form>
+          </CardBody>
+        </Card>
+      )}
+
+      {/* Average weight per behavior */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {EGG_BEHAVIORS.map((b) => {
+          const eggs = data.filter((d) => d.behavior === b);
+          return (
+            <MetricsCard
+              key={b}
+              label={`${b} — average weight`}
+              value={eggs.length ? `${avg(eggs)} g` : "—"}
+              description={`${eggs.length} eggs`}
+            />
+          );
+        })}
+      </div>
+
+      {/* Egg weight by duck */}
+      <Card shadow="md">
+        <CardHeader
+          title="Egg weight by duck"
+          subtitle="Visual comparison — PNS/BAFS 321:2021 size categories"
+          bordered
+        />
+        <CardBody className="p-6">
+          {data.length === 0 ? (
+            <div className="text-center py-10">
+              <div className="text-body-md text-grey-700">{emptyMessage}</div>
+              {loadState === "ready" && (
+                <div className="text-body-sm text-grey-500 mt-1">
+                  Use "Record egg" to add egg weight data
+                </div>
               )}
+            </div>
+          ) : (
+            <div className="space-y-3">
               {data.map((d) => {
-                const color = BEHAVIOR_COLORS[d.behavior];
-                const size = sizeOf(d);
+                const color = BEHAVIOR_HEX[d.behavior] ?? "#98A2B3";
                 return (
-                  <tr
-                    key={d.id}
-                    style={{ borderBottom: "1px solid #0d1b2e" }}
-                    onMouseEnter={(e) =>
-                      (e.currentTarget.style.background = "#111827")
-                    }
-                    onMouseLeave={(e) =>
-                      (e.currentTarget.style.background = "transparent")
-                    }
-                  >
-                    <td className="px-6 py-4 font-medium text-white">
+                  <div key={d.id} className="flex items-center gap-4">
+                    <div className="w-20 shrink-0 text-body-sm text-grey-700 text-right truncate">
                       {d.duck}
-                    </td>
-                    <td className="px-6 py-4">
-                      <span
-                        className="px-2 py-1 rounded-full text-xs font-semibold"
-                        style={{
-                          background: `${color}20`,
-                          color,
-                          border: `1px solid ${color}40`,
-                        }}
+                    </div>
+                    <div className="flex-1 h-7 rounded-md bg-grey-100 overflow-hidden">
+                      <div
+                        className="h-7 rounded-md flex items-center px-2"
+                        style={{ width: `${(d.weight / maxWeight) * 100}%`, background: color }}
                       >
-                        {d.behavior}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 font-bold" style={{ color }}>
-                      {d.weight}g
-                    </td>
-                    <td
-                      className="px-6 py-4 text-xs"
-                      style={{ color: size.color }}
-                    >
-                      {size.label}
-                    </td>
-                    <td className="px-6 py-4" style={{ color: "#475569" }}>
-                      {d.date}
-                    </td>
-                    <td className="px-6 py-4 text-right whitespace-nowrap">
-                      {confirmDeleteId === d.id ? (
-                        <div className="flex items-center justify-end gap-2">
-                          <span
-                            className="text-xs"
-                            style={{ color: "#94a3b8" }}
-                          >
-                            Delete this record?
-                          </span>
-                          <button
-                            onClick={() => handleDelete(d.id)}
-                            disabled={deletingId === d.id}
-                            className="px-2 py-1 rounded text-xs font-medium"
-                            style={{ background: "#f43f5e", color: "#fff" }}
-                          >
-                            {deletingId === d.id ? "Deleting…" : "Delete"}
-                          </button>
-                          <button
-                            onClick={() => {
-                              setConfirmDeleteId(null);
-                              setDeleteError(null);
-                            }}
-                            disabled={deletingId === d.id}
-                            className="px-2 py-1 rounded text-xs font-medium"
-                            style={{ background: "#1a3251", color: "#94a3b8" }}
-                          >
-                            Cancel
-                          </button>
-                        </div>
-                      ) : (
-                        <button
-                          onClick={() => {
-                            setConfirmDeleteId(d.id);
-                            setDeleteError(null);
-                          }}
-                          aria-label={`Delete record for ${d.duck} on ${d.date}`}
-                          title="Delete record"
-                          className="px-2 py-1 rounded text-xs"
-                          style={{
-                            color: "#64748b",
-                            border: "1px solid #1a3251",
-                          }}
-                        >
-                          🗑
-                        </button>
-                      )}
-                      {deleteError?.id === d.id && (
-                        <div
-                          className="text-xs mt-1"
-                          style={{ color: "#f43f5e" }}
-                        >
-                          {deleteError.message}
-                        </div>
-                      )}
-                    </td>
-                  </tr>
+                        <span className="text-body-xs font-semibold text-white">
+                          {d.weight}g
+                        </span>
+                      </div>
+                    </div>
+                    <div className="w-20 shrink-0">
+                      <Badge color={SIZE_COLORS[d.sizeCategory] ?? "neutral"} size="sm">
+                        {d.sizeCategory ?? "—"}
+                      </Badge>
+                    </div>
+                  </div>
                 );
               })}
-            </tbody>
-          </table>
+            </div>
+          )}
+        </CardBody>
+      </Card>
+
+      {/* Records */}
+      <Card shadow="md">
+        <CardHeader title="Egg weight records" bordered />
+        <div className="overflow-x-auto">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Duck</TableHead>
+                <TableHead>Behavior</TableHead>
+                <TableHead>Weight</TableHead>
+                <TableHead>Size category</TableHead>
+                <TableHead>Date</TableHead>
+                <TableHead>
+                  <span className="sr-only">Actions</span>
+                </TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {data.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={6} className="py-10 text-center text-grey-500">
+                    {emptyMessage}
+                  </TableCell>
+                </TableRow>
+              )}
+              {data.map((d) => (
+                <TableRow key={d.id}>
+                  <TableCell className="font-medium text-grey-900">{d.duck}</TableCell>
+                  <TableCell>
+                    <Badge color={behaviorBadgeColor(d.behavior)} size="sm">
+                      {d.behavior}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="font-semibold">{d.weight}g</TableCell>
+                  <TableCell>
+                    <Badge color={SIZE_COLORS[d.sizeCategory] ?? "neutral"} size="sm">
+                      {d.sizeCategory ?? "—"}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>{d.date}</TableCell>
+                  <TableCell className="text-right whitespace-nowrap">
+                    {confirmDeleteId === d.id ? (
+                      <div className="flex items-center justify-end gap-2">
+                        <span className="text-body-xs text-grey-600">
+                          Delete this record?
+                        </span>
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          onClick={() => handleDelete(d.id)}
+                          disabled={deletingId === d.id}
+                        >
+                          {deletingId === d.id ? "Deleting…" : "Delete"}
+                        </Button>
+                        <Button
+                          variant="grey"
+                          appearance="outlined"
+                          size="sm"
+                          onClick={() => {
+                            setConfirmDeleteId(null);
+                            setDeleteError(null);
+                          }}
+                          disabled={deletingId === d.id}
+                        >
+                          Cancel
+                        </Button>
+                      </div>
+                    ) : (
+                      <Button
+                        variant="grey"
+                        appearance="outlined"
+                        size="sm"
+                        iconPosition="icon-only"
+                        icon={<Trash2 size={16} />}
+                        aria-label={`Delete record for ${d.duck} on ${d.date}`}
+                        title="Delete record"
+                        onClick={() => {
+                          setConfirmDeleteId(d.id);
+                          setDeleteError(null);
+                        }}
+                      />
+                    )}
+                    {deleteError?.id === d.id && (
+                      <div className="text-body-xs text-error-600 mt-1">
+                        {deleteError.message}
+                      </div>
+                    )}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
         </div>
-      </div>
+      </Card>
     </div>
   );
 }
