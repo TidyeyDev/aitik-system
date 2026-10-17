@@ -5,6 +5,13 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>AI-TIK</title>
+    <script>
+      // Apply the saved theme before first paint (key matches ThemeContext.jsx).
+      try {
+        if (localStorage.getItem("aitik-theme") === "dark")
+          document.documentElement.classList.add("dark");
+      } catch {}
+    </script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/hls.js/1.4.10/hls.min.js"></script>
   </head>
   <body>

@@ -29,7 +29,7 @@ function CameraCard({ cam, status, footer, children }) {
         actions={<Badge color={badge.color}>{badge.label}</Badge>}
         bordered
       />
-      <div className="relative bg-grey-900" style={{ aspectRatio: "16/9" }}>
+      <div className="relative bg-black" style={{ aspectRatio: "16/9" }}>
         {children}
       </div>
       <div className="flex items-center justify-between px-6 py-3 text-body-xs text-grey-500">

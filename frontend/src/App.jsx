@@ -7,6 +7,7 @@ import {
   useLocation,
 } from "react-router-dom";
 import { AuthProvider, useAuth } from "./context/AuthContext";
+import { ThemeProvider } from "./context/ThemeContext";
 import Navbar from "./components/Navbar";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
@@ -34,19 +35,21 @@ function ProtectedLayout() {
 
 export default function App() {
   return (
-    <AuthProvider>
-      <BrowserRouter>
-        <Routes>
-          <Route path="/login" element={<Login />} />
-          <Route element={<ProtectedLayout />}>
-            <Route path="/" element={<Dashboard />} />
-            <Route path="/monitor" element={<LiveMonitor />} />
-            <Route path="/detections" element={<Detections />} />
-            <Route path="/eggs" element={<EggQuality />} />
-          </Route>
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </BrowserRouter>
-    </AuthProvider>
+    <ThemeProvider>
+      <AuthProvider>
+        <BrowserRouter>
+          <Routes>
+            <Route path="/login" element={<Login />} />
+            <Route element={<ProtectedLayout />}>
+              <Route path="/" element={<Dashboard />} />
+              <Route path="/monitor" element={<LiveMonitor />} />
+              <Route path="/detections" element={<Detections />} />
+              <Route path="/eggs" element={<EggQuality />} />
+            </Route>
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </BrowserRouter>
+      </AuthProvider>
+    </ThemeProvider>
   );
 }

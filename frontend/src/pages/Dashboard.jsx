@@ -71,7 +71,9 @@ const flagClass = (value, yesClass = "text-success-600") =>
 const ICON_TONES = {
   blue: "[&_.size-8]:bg-secondary-100 [&_.size-8]:border-secondary-100 [&_.size-8]:text-secondary-600",
   green: "[&_.size-8]:bg-success-100 [&_.size-8]:border-success-100 [&_.size-8]:text-success-600",
-  purple: "[&_.size-8]:bg-purple-100 [&_.size-8]:border-purple-100 [&_.size-8]:text-purple-600",
+  // Tailwind purple is not a Rayden token, so it needs its own dark shades.
+  purple:
+    "[&_.size-8]:bg-purple-100 [&_.size-8]:border-purple-100 [&_.size-8]:text-purple-600 dark:[&_.size-8]:bg-purple-950 dark:[&_.size-8]:border-purple-950 dark:[&_.size-8]:text-purple-300",
   orange: "[&_.size-8]:bg-warning-100 [&_.size-8]:border-warning-100 [&_.size-8]:text-warning-600",
 };
 
@@ -147,7 +149,7 @@ function SnapshotFeed({ detections }) {
             {detections.slice(0, 8).map((d) => (
               <div
                 key={d.id}
-                className="rounded-lg overflow-hidden border border-grey-200 bg-white"
+                className="rounded-lg overflow-hidden border border-grey-200 bg-surface"
               >
                 {d.snapshot ? (
                   <SnapshotImage
@@ -320,32 +322,36 @@ export default function Dashboard() {
             {detections.length === 0 ? (
               <EmptyState title="No data yet" hint="Awaiting YOLO model deployment" />
             ) : (
-              <ResponsiveContainer width="100%" height={220}>
-                <BarChart data={chartData} layout="vertical" barSize={14}>
-                  <XAxis type="number" hide allowDecimals={false} />
-                  <YAxis
-                    type="category"
-                    dataKey="name"
-                    width={110}
-                    tick={{ fill: "#475367", fontSize: 13 }}
-                    axisLine={false}
-                    tickLine={false}
-                  />
-                  <Tooltip
-                    contentStyle={{
-                      background: "#fff",
-                      border: "1px solid #E4E7EC",
-                      borderRadius: 8,
-                    }}
-                    cursor={{ fill: "#F0F2F5" }}
-                  />
-                  <Bar dataKey="value" radius={[0, 6, 6, 0]}>
-                    {chartData.map((entry) => (
-                      <Cell key={entry.name} fill={BEHAVIOR_HEX[entry.name]} />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
+              // currentColor lets the axis text and hover band follow the theme.
+              <div className="text-grey-600">
+                <ResponsiveContainer width="100%" height={220}>
+                  <BarChart data={chartData} layout="vertical" barSize={14}>
+                    <XAxis type="number" hide allowDecimals={false} />
+                    <YAxis
+                      type="category"
+                      dataKey="name"
+                      width={110}
+                      tick={{ fill: "currentColor", fontSize: 13 }}
+                      axisLine={false}
+                      tickLine={false}
+                    />
+                    <Tooltip
+                      contentStyle={{
+                        background: "var(--color-surface)",
+                        border: "1px solid var(--color-grey-200)",
+                        color: "var(--color-grey-800)",
+                        borderRadius: 8,
+                      }}
+                      cursor={{ fill: "currentColor", fillOpacity: 0.08 }}
+                    />
+                    <Bar dataKey="value" radius={[0, 6, 6, 0]}>
+                      {chartData.map((entry) => (
+                        <Cell key={entry.name} fill={BEHAVIOR_HEX[entry.name]} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
             )}
           </CardBody>
         </Card>

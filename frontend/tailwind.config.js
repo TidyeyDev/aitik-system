@@ -1,8 +1,10 @@
-import { colors, shadows, fontFamily, typography } from "@raydenui/ui/preset";
+import { fontFamily, typography } from "@raydenui/ui/preset";
 
-// Rayden UI ships compiled CSS plus raw tokens; this maps the tokens into
-// Tailwind (loaded via @config in index.css) so page classes like bg-grey-50,
-// shadow-soft-xs and text-h4 exist for our own markup.
+// Rayden UI ships compiled CSS plus raw tokens; this maps the type tokens into
+// Tailwind (loaded via @config in index.css) so classes like text-h4 and
+// font-heading exist for our own markup. Colours and shadows live in
+// index.css @theme instead, so they compile to CSS variables that dark mode
+// can swap.
 const text = (t) => [
   t.size,
   {
@@ -21,11 +23,7 @@ export default {
   content: ["./index.html", "./src/**/*.{js,ts,jsx,tsx}"],
   theme: {
     extend: {
-      colors,
       fontFamily,
-      boxShadow: Object.fromEntries(
-        Object.entries(shadows.soft).map(([k, v]) => [`soft-${k}`, v]),
-      ),
       fontSize: {
         ...prefixed("", typography.heading),
         ...prefixed("body-", typography.body),

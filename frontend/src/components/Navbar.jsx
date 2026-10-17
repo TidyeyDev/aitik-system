@@ -1,6 +1,6 @@
 import { useNavigate, useLocation } from "react-router-dom";
 import { useState, useEffect } from "react";
-import { Menu, X } from "lucide-react";
+import { Menu, Moon, Sun, X } from "lucide-react";
 import {
   Button,
   SidebarMenu,
@@ -10,6 +10,7 @@ import {
 import { chartIcon, homeIcon, listIcon, signOutIcon, videoIcon } from "@raydenui/ui/icons";
 import { socket } from "../api/client";
 import { useAuth } from "../context/AuthContext";
+import { useTheme } from "../context/ThemeContext";
 
 const links = [
   { path: "/", label: "Dashboard", icon: homeIcon },
@@ -34,6 +35,23 @@ function Brand() {
         <div className="text-body-xs text-grey-500">Duck Reproductive Monitoring</div>
       </div>
     </div>
+  );
+}
+
+function ThemeToggle() {
+  const { resolvedTheme, toggleTheme } = useTheme();
+  const dark = resolvedTheme === "dark";
+  return (
+    <Button
+      variant="grey"
+      appearance="outlined"
+      size="sm"
+      iconPosition="icon-only"
+      icon={dark ? <Sun size={18} /> : <Moon size={18} />}
+      aria-label={dark ? "Switch to light mode" : "Switch to dark mode"}
+      title={dark ? "Light mode" : "Dark mode"}
+      onClick={toggleTheme}
+    />
   );
 }
 
@@ -64,18 +82,21 @@ export default function Navbar() {
   return (
     <aside className="md:sticky md:top-0 md:h-screen md:p-4 md:shrink-0">
       {/* Mobile top bar */}
-      <div className="md:hidden flex items-center justify-between px-6 py-4 bg-white border-b border-grey-200">
+      <div className="md:hidden flex items-center justify-between px-6 py-4 bg-surface border-b border-grey-200">
         <Brand />
-        <Button
-          variant="grey"
-          appearance="outlined"
-          size="sm"
-          iconPosition="icon-only"
-          icon={menuOpen ? <X size={18} /> : <Menu size={18} />}
-          aria-label={menuOpen ? "Close menu" : "Open menu"}
-          aria-expanded={menuOpen}
-          onClick={() => setMenuOpen(!menuOpen)}
-        />
+        <div className="flex items-center gap-2">
+          <ThemeToggle />
+          <Button
+            variant="grey"
+            appearance="outlined"
+            size="sm"
+            iconPosition="icon-only"
+            icon={menuOpen ? <X size={18} /> : <Menu size={18} />}
+            aria-label={menuOpen ? "Close menu" : "Open menu"}
+            aria-expanded={menuOpen}
+            onClick={() => setMenuOpen(!menuOpen)}
+          />
+        </div>
       </div>
 
       <SidebarMenu
@@ -83,8 +104,9 @@ export default function Navbar() {
         onValueChange={handleSelect}
         className={`${menuOpen ? "flex" : "hidden"} md:flex w-full md:w-[272px] md:h-full rounded-none md:rounded-xl border-b md:border border-grey-200 md:shadow-soft-xs`}
       >
-        <div className="hidden md:block px-2 pb-2">
+        <div className="hidden md:flex items-center justify-between gap-2 px-2 pb-2">
           <Brand />
+          <ThemeToggle />
         </div>
 
         <SidebarMenuSection title="MAIN MENU">
