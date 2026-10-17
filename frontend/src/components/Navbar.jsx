@@ -96,7 +96,7 @@ export default function Navbar() {
               aria-current={link.path === pathname ? "page" : undefined}
               className={
                 link.path === pathname
-                  ? "bg-success-50 border-l-4 border-success-500 text-success-700 [&>span:first-child]:text-success-600"
+                  ? "bg-success-50 border-success-500 text-success-700 [&>span:first-child]:text-success-600"
                   : undefined
               }
             >
