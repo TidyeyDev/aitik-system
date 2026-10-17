@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
 import { api, socket } from "../api/client";
 import SnapshotImage from "../components/SnapshotImage";
-import SnapshotWithBox from "../components/SnapshotWithBox";
 import { useTunnelUrl } from "../api/useTunnelUrl";
 import { behaviorLabel, isBehavior } from "../behavior";
 
@@ -202,19 +201,12 @@ export default function Detections() {
                   }
                 >
                   <td className="px-6 py-4">
-                    {d.snapshot && tunnelUrl ? (
-                      <SnapshotWithBox
-                        detection={d}
-                        snapshotBaseUrl={tunnelUrl}
-                        alt={`${behaviorLabel(d.behavior)} snapshot`}
-                        className="w-40 rounded"
-                      />
-                    ) : d.snapshot ? (
+                    {d.snapshot ? (
                       <SnapshotImage
                         snapshot={d.snapshot}
                         tunnelUrl={tunnelUrl}
                         alt={`${behaviorLabel(d.behavior)} snapshot`}
-                        className="w-20 h-12 object-cover rounded"
+                        className="w-40 rounded"
                         link
                       />
                     ) : (
