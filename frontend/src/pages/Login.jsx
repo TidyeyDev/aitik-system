@@ -55,6 +55,13 @@ const BUBBLES = [
   [90, 8, 13, -8],
 ];
 
+const TEAM = [
+  "Kimberly DC. Anievas",
+  "Angel Valerie F. Ceñidoza",
+  "Jebsus Mayria L. Co",
+  "Nicholo Adrian A. Lauzon",
+];
+
 const inputClass =
   "login-input w-full rounded-xl border border-white/30 bg-white/10 px-4 py-3 text-body-md text-white placeholder:text-white/60 outline-none transition focus:border-white/70 focus:bg-white/15 focus:ring-2 focus:ring-white/30";
 
@@ -192,6 +199,26 @@ export default function Login() {
             Sign in
           </button>
         </form>
+
+        <div className="mt-8 border-t border-white/20 pt-6 text-center text-body-xs text-white/60 space-y-3">
+          <p>
+            <span className="block uppercase tracking-widest text-white/45">Adviser</span>
+            <span className="text-white/75">RIO CAMILLE M. PEDROCILLO, ECE</span>
+          </p>
+          <div>
+            <span className="block uppercase tracking-widest text-white/45">Members</span>
+            <ul className="text-white/75">
+              {TEAM.map((name) => (
+                <li key={name}>{name}</li>
+              ))}
+            </ul>
+          </div>
+          <p className="pt-1">
+            University of Rizal System – Morong Campus
+            <br />
+            College of Engineering | BS Electronics Engineering
+          </p>
+        </div>
       </div>
 
       <p className="relative text-center text-body-sm text-white/75 tracking-wide">
