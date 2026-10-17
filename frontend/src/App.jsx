@@ -24,7 +24,7 @@ function ProtectedLayout() {
   return (
     <div className="min-h-screen bg-grey-50 lg:flex">
       <Navbar />
-      <main className="flex-1 min-w-0 p-4 sm:p-6">
+      <main className="flex-1 min-w-0 px-4 pt-4 sm:px-6 sm:pt-6 pb-[calc(6rem+env(safe-area-inset-bottom))] lg:pb-6">
         <div className="max-w-7xl mx-auto">
           <Outlet />
         </div>

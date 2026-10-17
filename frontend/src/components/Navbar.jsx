@@ -1,6 +1,6 @@
-import { useNavigate, useLocation } from "react-router-dom";
-import { useState, useEffect, useRef } from "react";
-import { Menu, Moon, Sun, X } from "lucide-react";
+import { Link, useNavigate, useLocation } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { Camera, Egg, House, List, LogOut, Moon, Sun } from "lucide-react";
 import {
   Button,
   SidebarMenu,
@@ -13,10 +13,10 @@ import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../context/ThemeContext";
 
 const links = [
-  { path: "/", label: "Dashboard", icon: homeIcon },
-  { path: "/monitor", label: "Live Monitor", icon: videoIcon },
-  { path: "/detections", label: "Detections", icon: listIcon },
-  { path: "/eggs", label: "Egg Quality", icon: chartIcon },
+  { path: "/", label: "Dashboard", short: "Dashboard", icon: homeIcon, MobileIcon: House },
+  { path: "/monitor", label: "Live Monitor", short: "Monitor", icon: videoIcon, MobileIcon: Camera },
+  { path: "/detections", label: "Detections", short: "Detections", icon: listIcon, MobileIcon: List },
+  { path: "/eggs", label: "Egg Quality", short: "Eggs", icon: chartIcon, MobileIcon: Egg },
 ];
 
 function Brand() {
@@ -62,10 +62,7 @@ export default function Navbar() {
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const { logout } = useAuth();
-  const [menuOpen, setMenuOpen] = useState(false);
   const [connected, setConnected] = useState(socket.connected);
-  const menuButtonRef = useRef(null);
-  const closeButtonRef = useRef(null);
 
   useEffect(() => {
     const onConnect = () => setConnected(true);
@@ -78,86 +75,66 @@ export default function Navbar() {
     };
   }, []);
 
-  // Mobile drawer: Escape closes it, the page behind stays put, and focus
-  // moves into the drawer and back to the menu button when it closes.
-  useEffect(() => {
-    if (!menuOpen) return undefined;
-    const onKey = (e) => e.key === "Escape" && setMenuOpen(false);
-    document.addEventListener("keydown", onKey);
-    document.body.style.overflow = "hidden";
-    closeButtonRef.current?.focus();
-    const menuButton = menuButtonRef.current;
-    return () => {
-      document.removeEventListener("keydown", onKey);
-      document.body.style.overflow = "";
-      menuButton?.focus();
-    };
-  }, [menuOpen]);
-
   const handleSelect = (value) => {
-    setMenuOpen(false);
     if (value === "logout") logout();
     else navigate(value);
   };
 
   return (
     <>
-      {/* Below lg: top bar, and the sidebar becomes a slide-over drawer. */}
+      {/* Below lg: slim top bar plus a fixed bottom nav. */}
       <header className="lg:hidden sticky top-0 z-30 flex items-center justify-between gap-3 px-4 py-3 bg-surface border-b border-grey-200">
         <Brand />
         <div className="flex items-center gap-2">
           <ThemeToggle />
           <Button
-            ref={menuButtonRef}
             variant="grey"
             appearance="outlined"
             size="sm"
             iconPosition="icon-only"
-            icon={<Menu size={20} />}
-            aria-label="Open menu"
-            aria-expanded={menuOpen}
-            aria-controls="app-sidebar"
-            onClick={() => setMenuOpen(true)}
+            icon={<LogOut size={18} />}
+            aria-label="Log out"
+            title="Log out"
+            onClick={logout}
             className="size-11 shrink-0"
           />
         </div>
       </header>
 
-      {menuOpen && (
-        <div
-          className="lg:hidden fixed inset-0 z-40 bg-black/50"
-          aria-hidden="true"
-          onClick={() => setMenuOpen(false)}
-        />
-      )}
-
-      <aside
-        id="app-sidebar"
-        // Visible instantly on open (so focus can move in); stays visible
-        // through the slide-out on close, then hides from tab order.
-        className={`fixed inset-y-0 left-0 z-50 w-[288px] max-w-[85vw] p-3 duration-300 ease-out lg:sticky lg:top-0 lg:z-auto lg:h-screen lg:w-auto lg:max-w-none lg:shrink-0 lg:p-4 lg:visible lg:translate-x-0 lg:transition-none ${menuOpen ? "translate-x-0 visible transition-transform" : "-translate-x-full invisible transition-[transform,visibility]"}`}
+      <nav
+        aria-label="Main navigation"
+        className="lg:hidden fixed bottom-0 inset-x-0 z-30 grid grid-cols-4 bg-surface border-t border-grey-200 pb-[env(safe-area-inset-bottom)]"
       >
+        {links.map(({ path, short, MobileIcon }) => {
+          const active = path === pathname;
+          return (
+            <Link
+              key={path}
+              to={path}
+              aria-current={active ? "page" : undefined}
+              className={`flex min-h-16 flex-col items-center justify-center gap-1 text-[11px] font-medium no-underline ${active ? "text-success-600" : "text-grey-500"}`}
+            >
+              <span
+                className={`flex h-7 w-12 items-center justify-center rounded-full ${active ? "bg-success-50" : ""}`}
+              >
+                <MobileIcon size={20} strokeWidth={active ? 2.25 : 1.75} aria-hidden="true" />
+              </span>
+              {short}
+            </Link>
+          );
+        })}
+      </nav>
+
+      {/* lg and up: the sidebar. */}
+      <aside className="hidden lg:block lg:sticky lg:top-0 lg:h-screen lg:shrink-0 lg:p-4">
         <SidebarMenu
           value={pathname}
           onValueChange={handleSelect}
-          className="h-full w-full lg:w-[272px] border border-grey-200 shadow-soft-xs"
+          className="h-full w-[272px] border border-grey-200 shadow-soft-xs"
         >
           <div className="flex items-center justify-between gap-2 px-2 pb-2">
             <Brand />
-            <div className="hidden lg:block">
-              <ThemeToggle />
-            </div>
-            <Button
-              ref={closeButtonRef}
-              variant="grey"
-              appearance="outlined"
-              size="sm"
-              iconPosition="icon-only"
-              icon={<X size={20} />}
-              aria-label="Close menu"
-              onClick={() => setMenuOpen(false)}
-              className="size-11 shrink-0 lg:hidden"
-            />
+            <ThemeToggle />
           </div>
 
           <SidebarMenuSection title="MAIN MENU">
