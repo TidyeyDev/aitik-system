@@ -22,9 +22,9 @@ function ProtectedLayout() {
     return <Navigate to="/login" replace state={{ from: location.pathname }} />;
   }
   return (
-    <div className="min-h-screen bg-grey-50 md:flex">
+    <div className="min-h-screen bg-grey-50 lg:flex">
       <Navbar />
-      <main className="flex-1 min-w-0 p-6">
+      <main className="flex-1 min-w-0 p-4 sm:p-6">
         <div className="max-w-7xl mx-auto">
           <Outlet />
         </div>

@@ -126,7 +126,7 @@ export default function EggQuality() {
           </p>
         </div>
         {!showForm && (
-          <Button variant="primary" icon={plusIcon} iconPosition="leading" onClick={() => setShowForm(true)}>
+          <Button variant="primary" icon={plusIcon} iconPosition="leading" onClick={() => setShowForm(true)} className="h-11">
             Record egg
           </Button>
         )}
@@ -137,7 +137,7 @@ export default function EggQuality() {
           <CardHeader title="New egg record" bordered />
           <CardBody className="p-6">
             <form onSubmit={handleAdd} className="space-y-6">
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
                 <Input
                   label="Duck"
                   value={form.duck}
@@ -172,13 +172,14 @@ export default function EggQuality() {
               </div>
               {saveError && <p className="text-body-sm text-error-600">{saveError}</p>}
               <div className="flex gap-3">
-                <Button type="submit" variant="primary" disabled={saving}>
+                <Button type="submit" variant="primary" disabled={saving} className="h-11">
                   {saving ? "Saving…" : "Save record"}
                 </Button>
                 <Button
                   type="button"
                   variant="grey"
                   appearance="outlined"
+                  className="h-11"
                   onClick={() => {
                     setShowForm(false);
                     setSaveError(null);
@@ -307,6 +308,7 @@ export default function EggQuality() {
                           size="sm"
                           onClick={() => handleDelete(d.id)}
                           disabled={deletingId === d.id}
+                          className="h-11"
                         >
                           {deletingId === d.id ? "Deleting…" : "Delete"}
                         </Button>
@@ -319,6 +321,7 @@ export default function EggQuality() {
                             setDeleteError(null);
                           }}
                           disabled={deletingId === d.id}
+                          className="h-11"
                         >
                           Cancel
                         </Button>
@@ -332,6 +335,7 @@ export default function EggQuality() {
                         icon={<Trash2 size={16} />}
                         aria-label={`Delete record for ${d.duck} on ${d.date}`}
                         title="Delete record"
+                        className="size-11"
                         onClick={() => {
                           setConfirmDeleteId(d.id);
                           setDeleteError(null);

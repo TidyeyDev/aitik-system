@@ -1,8 +1,7 @@
 import { useState, useEffect } from "react";
 import {
   Badge,
-  ButtonGroup,
-  ButtonGroupItem,
+  Button,
   Card,
   CardHeader,
   Table,
@@ -67,14 +66,20 @@ export default function Detections() {
         </p>
       </div>
 
-      <div className="overflow-x-auto">
-        <ButtonGroup>
-          {behaviors.map((b) => (
-            <ButtonGroupItem key={b} active={filter === b} onClick={() => setFilter(b)}>
-              {b} ({countOf(b)})
-            </ButtonGroupItem>
-          ))}
-        </ButtonGroup>
+      <div className="flex flex-wrap gap-2" role="group" aria-label="Filter by behavior">
+        {behaviors.map((b) => (
+          <Button
+            key={b}
+            size="sm"
+            variant={filter === b ? "secondary" : "grey"}
+            appearance={filter === b ? "solid" : "outlined"}
+            aria-pressed={filter === b}
+            onClick={() => setFilter(b)}
+            className="h-11"
+          >
+            {b} ({countOf(b)})
+          </Button>
+        ))}
       </div>
 
       <Card shadow="md">

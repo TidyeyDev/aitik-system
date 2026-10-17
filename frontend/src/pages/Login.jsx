@@ -86,7 +86,7 @@ export default function Login() {
   };
 
   return (
-    <div className="login-bg relative min-h-screen overflow-hidden flex flex-col items-center justify-center gap-6 p-6">
+    <div className="login-bg relative min-h-screen overflow-hidden flex flex-col items-center justify-center gap-6 px-4 py-8 sm:p-6">
       <style>{PAGE_CSS}</style>
 
       {/* Background shapes */}
@@ -115,7 +115,7 @@ export default function Login() {
 
       {/* Glass card */}
       <div
-        className="relative w-full max-w-sm p-8 text-white"
+        className="relative w-full max-w-md p-6 sm:p-8 text-white"
         style={{
           background: "rgba(255, 255, 255, 0.12)",
           backdropFilter: "blur(20px)",

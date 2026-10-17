@@ -32,7 +32,7 @@ function CameraCard({ cam, status, footer, children }) {
       <div className="relative bg-black" style={{ aspectRatio: "16/9" }}>
         {children}
       </div>
-      <div className="flex items-center justify-between px-6 py-3 text-body-xs text-grey-500">
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 px-4 sm:px-6 py-3 text-body-xs text-grey-500">
         <div className="flex gap-3">{footer}</div>
         <span>Lauzon Residence, Cardona, Rizal</span>
       </div>

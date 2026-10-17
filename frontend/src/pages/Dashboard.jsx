@@ -112,7 +112,7 @@ function SystemStatusPanel({ status }) {
   return (
     <Card shadow="md" className="border-l-4 border-l-secondary-500">
       <CardHeader title="System status" bordered />
-      <CardBody className="p-6 grid grid-cols-2 md:grid-cols-5 gap-6">
+      <CardBody className="p-6 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4 sm:gap-6">
         {items.map((item) => (
           <div key={item.label}>
             <div className="text-body-xs text-grey-500">{item.label}</div>
@@ -145,7 +145,7 @@ function SnapshotFeed({ detections }) {
             hint="Awaiting YOLO model deployment"
           />
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
             {detections.slice(0, 8).map((d) => (
               <div
                 key={d.id}
@@ -164,13 +164,13 @@ function SnapshotFeed({ detections }) {
                   </div>
                 )}
                 <div className="p-3 space-y-2">
-                  <div className="flex items-center justify-between">
+                  <div className="flex flex-wrap items-center justify-between gap-1">
                     <Badge color={behaviorBadgeColor(d.behavior)} size="sm">
                       {behaviorLabel(d.behavior)}
                     </Badge>
                     <span className="text-body-xs text-grey-500">{d.camera}</span>
                   </div>
-                  <div className="flex items-center justify-between text-body-xs text-grey-500">
+                  <div className="flex flex-wrap items-center justify-between gap-x-2 text-body-xs text-grey-500">
                     <span>{new Date(d.timestamp).toLocaleString()}</span>
                     <span>{formatConfidence(d.confidence)}</span>
                   </div>
@@ -277,7 +277,7 @@ export default function Dashboard() {
       <SystemStatusPanel status={status} />
 
       {/* Metrics */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
         <MetricsCard
           label="Female ducks"
           value="8"
@@ -310,7 +310,7 @@ export default function Dashboard() {
 
       <SnapshotFeed detections={detections} />
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
         {/* Behavior Distribution */}
         <Card shadow="md">
           <CardHeader
