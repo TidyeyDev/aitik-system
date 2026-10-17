@@ -63,12 +63,17 @@ const formatTime = (value) => {
 const formatFlag = (value, yes, no, unknown = "Unknown") =>
   value === true ? yes : value === false ? no : unknown;
 
-const flagClass = (value) =>
-  value === true
-    ? "text-success-600"
-    : value === false
-      ? "text-error-600"
-      : "text-grey-500";
+const flagClass = (value, yesClass = "text-success-600") =>
+  value === true ? yesClass : value === false ? "text-error-600" : "text-grey-500";
+
+// MetricsCard has no icon-colour prop; these tint its icon square (the
+// .size-8 box Rayden renders) from the outside.
+const ICON_TONES = {
+  blue: "[&_.size-8]:bg-secondary-100 [&_.size-8]:border-secondary-100 [&_.size-8]:text-secondary-600",
+  green: "[&_.size-8]:bg-success-100 [&_.size-8]:border-success-100 [&_.size-8]:text-success-600",
+  purple: "[&_.size-8]:bg-purple-100 [&_.size-8]:border-purple-100 [&_.size-8]:text-purple-600",
+  orange: "[&_.size-8]:bg-warning-100 [&_.size-8]:border-warning-100 [&_.size-8]:text-warning-600",
+};
 
 function EmptyState({ title, hint }) {
   return (
@@ -93,7 +98,7 @@ function SystemStatusPanel({ status }) {
     {
       label: "YOLO Model",
       value: formatFlag(s.modelDeployed, "Deployed", "Not deployed", "Not confirmed"),
-      className: flagClass(s.modelDeployed),
+      className: flagClass(s.modelDeployed, "text-secondary-600"),
     },
     { label: "Last Detection", value: formatTime(s.lastDetectionAt) },
     {
@@ -103,7 +108,7 @@ function SystemStatusPanel({ status }) {
   ];
 
   return (
-    <Card shadow="md">
+    <Card shadow="md" className="border-l-4 border-l-secondary-500">
       <CardHeader title="System status" bordered />
       <CardBody className="p-6 grid grid-cols-2 md:grid-cols-5 gap-6">
         {items.map((item) => (
@@ -275,24 +280,28 @@ export default function Dashboard() {
           label="Female ducks"
           value="8"
           icon={userIcon}
+          className={ICON_TONES.blue}
           description="Configured flock size"
         />
         <MetricsCard
           label="Receptive events"
           value={receptiveToday}
           icon={heartIcon}
+          className={ICON_TONES.green}
           description="Detected today"
         />
         <MetricsCard
           label="Mating events"
           value={matingToday}
           icon={chartUpIcon}
+          className={ICON_TONES.purple}
           description="Detected today"
         />
         <MetricsCard
           label="Total detected"
           value={detections.length}
           icon={eyeIcon}
+          className={ICON_TONES.orange}
           description="Stored on backend (last 100)"
         />
       </div>

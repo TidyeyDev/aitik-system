@@ -21,11 +21,16 @@ const links = [
 function Brand() {
   return (
     <div className="flex items-center gap-3">
-      <span className="text-3xl" aria-hidden="true">
+      <span
+        className="flex size-11 items-center justify-center rounded-xl bg-success-100 ring-1 ring-success-200 text-2xl"
+        aria-hidden="true"
+      >
         🦆
       </span>
       <div>
-        <div className="font-heading text-h6 text-grey-900">AI-TIK</div>
+        <div className="font-heading text-h6 text-grey-900">
+          AI-<span className="text-success-600">TIK</span>
+        </div>
         <div className="text-body-xs text-grey-500">Duck Reproductive Monitoring</div>
       </div>
     </div>
@@ -84,7 +89,17 @@ export default function Navbar() {
 
         <SidebarMenuSection title="MAIN MENU">
           {links.map((link) => (
-            <SidebarMenuItem key={link.path} value={link.path} icon={link.icon}>
+            <SidebarMenuItem
+              key={link.path}
+              value={link.path}
+              icon={link.icon}
+              aria-current={link.path === pathname ? "page" : undefined}
+              className={
+                link.path === pathname
+                  ? "bg-success-50 border-l-4 border-success-500 text-success-700 [&>span:first-child]:text-success-600"
+                  : undefined
+              }
+            >
               {link.label}
             </SidebarMenuItem>
           ))}
