@@ -95,13 +95,16 @@ export default function SnapshotWithBox({ detection, snapshotBaseUrl, alt, class
   const src = /^https?:\/\//.test(detection.snapshot) ? detection.snapshot : `${base}${detection.snapshot}`;
 
   return (
-    <div style={{ position: "relative", display: "inline-block", lineHeight: 0 }}>
+    // className sizes the wrapper; the img and canvas fill it, so they always line up.
+    <div
+      className={className}
+      style={{ position: "relative", display: "block", lineHeight: 0, overflow: "hidden" }}
+    >
       <img
         ref={imgRef}
         src={src}
         alt={alt || `${detection.behavior} on ${detection.camera}`}
-        className={className}
-        style={{ display: "block", maxWidth: "100%", ...style }}
+        style={{ display: "block", width: "100%", height: "auto", ...style }}
       />
       <canvas
         ref={canvasRef}

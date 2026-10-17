@@ -10,6 +10,7 @@ import {
   Cell,
 } from "recharts";
 import SnapshotImage from "../components/SnapshotImage";
+import SnapshotWithBox from "../components/SnapshotWithBox";
 import { useTunnelUrl } from "../api/useTunnelUrl";
 import { behaviorLabel, isBehavior } from "../behavior";
 
@@ -162,7 +163,14 @@ function SnapshotFeed({ detections }) {
               className="rounded-lg overflow-hidden"
               style={{ background: "#0a1628", border: "1px solid #1a3251" }}
             >
-              {d.snapshot ? (
+              {d.snapshot && tunnelUrl ? (
+                <SnapshotWithBox
+                  detection={d}
+                  snapshotBaseUrl={tunnelUrl}
+                  alt={`${behaviorLabel(d.behavior)} snapshot from ${d.camera}`}
+                  className="w-full"
+                />
+              ) : d.snapshot ? (
                 <SnapshotImage
                   snapshot={d.snapshot}
                   tunnelUrl={tunnelUrl}
