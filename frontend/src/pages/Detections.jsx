@@ -207,7 +207,7 @@ export default function Detections() {
                         detection={d}
                         snapshotBaseUrl={tunnelUrl}
                         alt={`${behaviorLabel(d.behavior)} snapshot`}
-                        className="w-20 rounded"
+                        className="w-40 rounded"
                       />
                     ) : d.snapshot ? (
                       <SnapshotImage

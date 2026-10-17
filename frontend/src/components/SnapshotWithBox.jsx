@@ -39,9 +39,12 @@ function draw(canvas, img, detection) {
   const height = bbox.height * sy;
   const color = colorFor(behavior);
 
-  ctx.lineWidth = 2;
+  ctx.lineWidth = 3;
   ctx.strokeStyle = color;
   ctx.strokeRect(left, top, width, height);
+
+  // On thumbnails the label would cover the box itself.
+  if (cssW < 240) return;
 
   const label =
     typeof confidence === "number"
