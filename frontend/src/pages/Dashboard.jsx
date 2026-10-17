@@ -247,7 +247,7 @@ export default function Dashboard() {
         <div>
           <h1 className="font-heading text-h4 text-grey-900">Dashboard</h1>
           <p className="text-body-md text-grey-700 mt-1">
-            Turentigue Farm, Morong, Rizal — Philippine Mallard Duck Monitoring
+            Lauzon Residence, Cardona, Rizal — Philippine Mallard Duck Monitoring
           </p>
         </div>
         <div className="text-right hidden sm:block">

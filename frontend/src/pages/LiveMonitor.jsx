@@ -34,7 +34,7 @@ function CameraCard({ cam, status, footer, children }) {
       </div>
       <div className="flex items-center justify-between px-6 py-3 text-body-xs text-grey-500">
         <div className="flex gap-3">{footer}</div>
-        <span>Turentigue Farm</span>
+        <span>Lauzon Residence, Cardona, Rizal</span>
       </div>
     </Card>
   );
@@ -157,7 +157,7 @@ export default function LiveMonitor() {
         <div>
           <h1 className="font-heading text-h4 text-grey-900">Live Monitor</h1>
           <p className="text-body-md text-grey-700 mt-1">
-            Real-time camera feeds — Turentigue Farm, Morong, Rizal
+            Real-time camera feeds — Lauzon Residence, Cardona, Rizal
           </p>
         </div>
         <Badge color={tunnelUrl ? "success" : "warning"} size="lg">
