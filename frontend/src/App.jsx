@@ -14,6 +14,7 @@ import Dashboard from "./pages/Dashboard";
 import LiveMonitor from "./pages/LiveMonitor";
 import Detections from "./pages/Detections";
 import EggQuality from "./pages/EggQuality";
+import AboutUs from "./pages/AboutUs";
 
 function ProtectedLayout() {
   const { authed } = useAuth();
@@ -45,6 +46,7 @@ export default function App() {
               <Route path="/monitor" element={<LiveMonitor />} />
               <Route path="/detections" element={<Detections />} />
               <Route path="/eggs" element={<EggQuality />} />
+              <Route path="/about" element={<AboutUs />} />
             </Route>
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
