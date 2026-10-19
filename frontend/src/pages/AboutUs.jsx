@@ -6,13 +6,21 @@ import { clockIcon, eyeIcon, targetIcon } from "@raydenui/ui/icons";
 const ADVISER = {
   name: "RIO CAMILLE M. PEDROCILLO, ECE",
   role: "Research Adviser",
-  src: "/team/pedrocillo.jpg",
+  src: "/team/pedrocillo.png",
 };
 
 const MEMBERS = [
-  { name: "Rhitch Aisha N. Asunción", role: "Project Leader", src: "/team/asuncion.jpg" },
+  {
+    name: "Rhitch Aisha N. Asunción",
+    role: "Project Leader",
+    src: "/team/asuncion.jpg",
+  },
   { name: "Kimberly DC. Anievas", role: "Member", src: "/team/anievas.jpg" },
-  { name: "Angel Valerie F. Ceñidoza", role: "Member", src: "/team/cenidoza.jpg" },
+  {
+    name: "Angel Valerie F. Ceñidoza",
+    role: "Member",
+    src: "/team/cenidoza.jpg",
+  },
   { name: "Jebsus Mayria L. Co", role: "Member", src: "/team/co.jpg" },
   { name: "Nicholo Adrian A. Lauzon", role: "Member", src: "/team/lauzon.jpg" },
 ];
@@ -25,7 +33,10 @@ const STATS = [
 
 // First + last name initial, skipping middle initials and the ", ECE" suffix.
 function initials(name) {
-  const words = name.replace(/,.*$/, "").split(/\s+/).filter((w) => !w.endsWith("."));
+  const words = name
+    .replace(/,.*$/, "")
+    .split(/\s+/)
+    .filter((w) => !w.endsWith("."));
   return (words[0][0] + words[words.length - 1][0]).toUpperCase();
 }
 
@@ -58,7 +69,11 @@ function MemberCard({ name, role, src, highlight }) {
       className={highlight ? "border-2 border-success-500" : ""}
     >
       <CardBody className="p-6 flex flex-col items-center text-center gap-3">
-        <Avatar name={name} src={src} size={highlight ? "size-28" : "size-24"} />
+        <Avatar
+          name={name}
+          src={src}
+          size={highlight ? "size-28" : "size-24"}
+        />
         <div className="font-heading text-h6 text-grey-900">{name}</div>
         <Badge color={highlight ? "success" : "neutral"} size="sm">
           {role}
@@ -72,13 +87,16 @@ export default function AboutUs() {
   return (
     <div className="space-y-6 sm:space-y-8">
       <header className="text-center py-4 sm:py-6">
-        <div className="text-6xl" aria-hidden="true">🦆</div>
+        <div className="text-6xl" aria-hidden="true">
+          🦆
+        </div>
         <h1 className="font-heading text-h2 text-grey-900 mt-3">
           AI-<span className="text-success-600">TIK</span>
         </h1>
         <p className="mt-3 max-w-2xl mx-auto text-body-lg text-grey-600">
-          AI-TIK: An AI-Based Philippine Mallard Duck Behavioral Monitoring
-          System for Reproductive Assessment
+          AI-TIK: AI System Identification for Reproductive Receptivity of
+          Philippine Mallard Ducks (Anas platyrhynchos) Based on Behavioral
+          Patterns
         </p>
       </header>
 
@@ -100,7 +118,12 @@ export default function AboutUs() {
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
         {STATS.map((s) => (
-          <MetricsCard key={s.label} label={s.label} value={s.value} icon={s.icon} />
+          <MetricsCard
+            key={s.label}
+            label={s.label}
+            value={s.value}
+            icon={s.icon}
+          />
         ))}
       </div>
 
