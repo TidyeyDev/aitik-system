@@ -10,10 +10,11 @@ const ADVISER = {
 };
 
 const MEMBERS = [
-  { name: "Kimberly DC. Anievas", role: "BS Electronics Engineering", src: "/team/kimberly.jpg" },
-  { name: "Angel Valerie F. Ceñidoza", role: "BS Electronics Engineering", src: "/team/angel.jpg" },
-  { name: "Jebsus Mayria L. Co", role: "BS Electronics Engineering", src: "/team/jebsus.jpg" },
-  { name: "Nicholo Adrian A. Lauzon", role: "BS Electronics Engineering", src: "/team/nicholo.jpg" },
+  { name: "Rhitch Aisha N. Asunción", role: "Project Leader", src: "/team/asuncion.jpg" },
+  { name: "Kimberly DC. Anievas", role: "Member", src: "/team/anievas.jpg" },
+  { name: "Angel Valerie F. Ceñidoza", role: "Member", src: "/team/cenidoza.jpg" },
+  { name: "Jebsus Mayria L. Co", role: "Member", src: "/team/co.jpg" },
+  { name: "Nicholo Adrian A. Lauzon", role: "Member", src: "/team/lauzon.jpg" },
 ];
 
 const STATS = [
@@ -108,7 +109,7 @@ export default function AboutUs() {
         <div className="max-w-sm mx-auto">
           <MemberCard {...ADVISER} highlight />
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
           {MEMBERS.map((m) => (
             <MemberCard key={m.name} {...m} />
           ))}
