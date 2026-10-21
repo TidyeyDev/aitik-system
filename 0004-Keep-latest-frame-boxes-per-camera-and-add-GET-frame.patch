@@ -1,0 +1,82 @@
+From 533d8f117b0f7963aee724148a45dc82580c804a Mon Sep 17 00:00:00 2001
+From: GadgetHub123 <tjayyy78@gmail.com>
+Date: Thu, 15 Oct 2026 10:25:31 +0800
+Subject: [PATCH 4/5] Keep latest frame boxes per camera and add GET
+ /frame-boxes/:camId
+
+POST /frame-boxes now also keeps the latest payload per camera in memory
+(empty after a restart, at most 32 cameras) and adds receivedAt to it.
+GET /frame-boxes/:camId returns that payload, or boxes: [] when none
+has arrived, so a Live Monitor opened between detector cycles can draw
+the current boxes without waiting for the next frame_boxes event.
+
+Applies on top of 0003 (Add bounding boxes to detections and a live
+frame_boxes event).
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ backend/server.js | 33 ++++++++++++++++++++++++++++++---
+ 1 file changed, 30 insertions(+), 3 deletions(-)
+
+diff --git a/backend/server.js b/backend/server.js
+index a5e86ab..ce9a9e2 100644
+--- a/backend/server.js
++++ b/backend/server.js
+@@ -30,8 +30,14 @@ function toTimestamp(value) {
+   return Number.isNaN(t.getTime()) ? null : t.toISOString();
+ }
+ 
++// Latest /frame-boxes payload per camera, in memory only (empty after a
++// restart), so a Live Monitor opened between detector cycles can draw the
++// current boxes right away instead of waiting for the next frame_boxes event.
++const latestFrameBoxes = new Map();
++const MAX_FRAME_BOX_CAMERAS = 32;
++
+ // Pi posts every analyzed frame's boxes here for the Live Monitor overlay.
+-// Broadcast only, never stored: an empty `boxes` list clears that camera.
++// Kept per camera and broadcast: an empty `boxes` list clears that camera.
+ app.post("/frame-boxes", (req, res) => {
+   const { camera } = req.body;
+   if (typeof camera !== "string" || !camera) {
+@@ -50,15 +56,36 @@ app.post("/frame-boxes", (req, res) => {
+     return res.status(400).json({ success: false, error: "frame required with boxes" });
+   }
+ 
+-  io.emit("frame_boxes", {
++  const payload = {
+     camera,
+     frameId: toFrameId(req.body.frameId),
+     capturedAt: toTimestamp(req.body.capturedAt),
++    receivedAt: new Date().toISOString(),
+     frame,
+     boxes,
+-  });
++  };
++  if (!latestFrameBoxes.has(camera) && latestFrameBoxes.size >= MAX_FRAME_BOX_CAMERAS) {
++    return res.status(400).json({ success: false, error: "too many cameras" });
++  }
++  latestFrameBoxes.set(camera, payload);
++  io.emit("frame_boxes", payload);
+   systemStatus.lastSeen = new Date().toISOString();
+   res.json({ success: true });
+ });
+ 
++// Latest boxes for one camera; an empty list if none have arrived yet.
++app.get("/frame-boxes/:camId", (req, res) => {
++  const latest = latestFrameBoxes.get(req.params.camId);
++  res.json(
++    latest || {
++      camera: req.params.camId,
++      frameId: null,
++      capturedAt: null,
++      receivedAt: null,
++      frame: null,
++      boxes: [],
++    }
++  );
++});
++
+ app.get("/eggs", (req, res) => res.json(eggRecords));
+-- 
+2.47.3
+

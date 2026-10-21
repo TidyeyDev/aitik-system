@@ -1,0 +1,17 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "side-tab",
+        "value": "*",
+        "files": [
+          "src/pages/Dashboard.jsx"
+        ],
+        "createdAt": "2026-10-17T10:15:38.731Z",
+        "reason": "User explicitly requested border-l-4 on the System Status card (item 5 of their request)"
+      }
+    ]
+  }
+}
