@@ -3,11 +3,13 @@ import { Alert, Badge, Card, CardHeader } from "@raydenui/ui";
 import { api, socket } from "../api/client";
 import FrameBoxOverlay from "../components/FrameBoxOverlay";
 
-// "live" cameras are streamed over HLS; "recording" cameras only record on
-// the Pi and upload clips to Telegram, so they have no stream to play.
+// Must match the camera roles in the Pi's inference/config.py.
+// "live" cameras are streamed over HLS and watched for mating; a mating clip
+// is sent to Telegram automatically. "recording" cameras only record egg
+// footage on the Pi, so they have no stream to play.
 const cameras = [
-  { id: "cam1", label: "Camera 1", position: "North", mode: "live" },
-  { id: "cam2", label: "Camera 2", position: "South", mode: "live" },
+  { id: "cam1", label: "Camera 1", position: "North", mode: "recording" },
+  { id: "cam2", label: "Camera 2", position: "South", mode: "recording" },
   { id: "cam3", label: "Camera 3", position: "East", mode: "live" },
   { id: "cam4", label: "Camera 4", position: "West", mode: "live" },
 ];
@@ -79,6 +81,7 @@ function CameraFeed({ cam, tunnelUrl }) {
       status={status}
       footer={
         <>
+          <span>Mating detection</span>
           <span>640×480</span>
           <span>15 FPS</span>
           <span>H.264</span>
@@ -122,17 +125,17 @@ function RecordingTile({ cam }) {
       status="recording"
       footer={
         <>
-          <span>10-min clips</span>
-          <span>Telegram</span>
+          <span>Egg camera</span>
+          <span>10-min clips · Telegram</span>
         </>
       }
     >
       <div className="absolute inset-0 flex flex-col items-center justify-center text-center p-6">
         <div className="text-body-md font-medium text-white">
-          Recording — clips sent via Telegram
+          Egg camera — recording
         </div>
         <div className="text-body-xs text-grey-400 mt-1">
-          {cam.label} — {cam.position} · not streamed live
+          Clips are sent via Telegram · not streamed live
         </div>
       </div>
     </CameraCard>
@@ -190,10 +193,10 @@ export default function LiveMonitor() {
         <CardHeader title="Recording setup" bordered />
         <div className="grid grid-cols-2 md:grid-cols-4 gap-6 p-6">
           {[
-            { label: "Recording mode", value: "24/7 continuous" },
-            { label: "Clip duration", value: "10 minutes" },
+            { label: "Cameras 1 & 2", value: "Egg recording, 10-min clips" },
+            { label: "Cameras 3 & 4", value: "Live mating detection" },
+            { label: "Mating clips", value: "Auto, up to 5 min, 1 min before" },
             { label: "Upload channel", value: "Telegram" },
-            { label: "Storage policy", value: "Auto-delete after 2 hr" },
           ].map((info) => (
             <div key={info.label}>
               <div className="text-body-xs text-grey-500">{info.label}</div>
