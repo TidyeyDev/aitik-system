@@ -6,7 +6,7 @@ import { clockIcon, eyeIcon, targetIcon } from "@raydenui/ui/icons";
 const ADVISER = {
   name: "RIO CAMILLE M. PEDROCILLO, ECE",
   role: "Research Adviser",
-  src: "/team/pedrocillo.png",
+  src: "/team/pedrocillo.jpg",
 };
 
 const MEMBERS = [

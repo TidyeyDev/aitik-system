@@ -6,8 +6,8 @@ import FrameBoxOverlay from "../components/FrameBoxOverlay";
 // "live" cameras are streamed over HLS; "recording" cameras only record on
 // the Pi and upload clips to Telegram, so they have no stream to play.
 const cameras = [
-  { id: "cam1", label: "Camera 1", position: "North", mode: "recording" },
-  { id: "cam2", label: "Camera 2", position: "South", mode: "recording" },
+  { id: "cam1", label: "Camera 1", position: "North", mode: "live" },
+  { id: "cam2", label: "Camera 2", position: "South", mode: "live" },
   { id: "cam3", label: "Camera 3", position: "East", mode: "live" },
   { id: "cam4", label: "Camera 4", position: "West", mode: "live" },
 ];
