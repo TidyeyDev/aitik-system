@@ -14,6 +14,7 @@ import Dashboard from "./pages/Dashboard";
 import LiveMonitor from "./pages/LiveMonitor";
 import Detections from "./pages/Detections";
 import EggQuality from "./pages/EggQuality";
+import MatingEvents from "./pages/MatingEvents";
 import AboutUs from "./pages/AboutUs";
 
 function ProtectedLayout() {
@@ -45,6 +46,7 @@ export default function App() {
               <Route path="/" element={<Dashboard />} />
               <Route path="/monitor" element={<LiveMonitor />} />
               <Route path="/detections" element={<Detections />} />
+              <Route path="/mating" element={<MatingEvents />} />
               <Route path="/eggs" element={<EggQuality />} />
               <Route path="/about" element={<AboutUs />} />
             </Route>

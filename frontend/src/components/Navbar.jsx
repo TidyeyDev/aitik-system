@@ -1,13 +1,13 @@
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useState, useEffect } from "react";
-import { Camera, Egg, House, Info, List, LogOut, Moon, Sun } from "lucide-react";
+import { Camera, Egg, Heart, House, Info, List, LogOut, Moon, Sun } from "lucide-react";
 import {
   Button,
   SidebarMenu,
   SidebarMenuItem,
   SidebarMenuSection,
 } from "@raydenui/ui";
-import { chartIcon, homeIcon, infoCircleIcon, listIcon, signOutIcon, videoIcon } from "@raydenui/ui/icons";
+import { chartIcon, heartIcon, homeIcon, infoCircleIcon, listIcon, signOutIcon, videoIcon } from "@raydenui/ui/icons";
 import { socket } from "../api/client";
 import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../context/ThemeContext";
@@ -16,6 +16,7 @@ const links = [
   { path: "/", label: "Dashboard", short: "Dashboard", icon: homeIcon, MobileIcon: House },
   { path: "/monitor", label: "Live Monitor", short: "Monitor", icon: videoIcon, MobileIcon: Camera },
   { path: "/detections", label: "Detections", short: "Detections", icon: listIcon, MobileIcon: List },
+  { path: "/mating", label: "Mating Events", short: "Mating", icon: heartIcon, MobileIcon: Heart },
   { path: "/eggs", label: "Egg Quality", short: "Eggs", icon: chartIcon, MobileIcon: Egg },
   { path: "/about", label: "About Us", short: "About", icon: infoCircleIcon, MobileIcon: Info },
 ];
@@ -104,7 +105,7 @@ export default function Navbar() {
 
       <nav
         aria-label="Main navigation"
-        className="lg:hidden fixed bottom-0 inset-x-0 z-30 grid grid-cols-5 bg-surface border-t border-grey-200 pb-[env(safe-area-inset-bottom)]"
+        className="lg:hidden fixed bottom-0 inset-x-0 z-30 grid grid-cols-6 bg-surface border-t border-grey-200 pb-[env(safe-area-inset-bottom)]"
       >
         {links.map(({ path, short, MobileIcon }) => {
           const active = path === pathname;
