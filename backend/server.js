@@ -97,7 +97,7 @@ async function initStorage() {
     systemStatus.storage = "mongodb";
     console.log(
       `MongoDB connected: loaded ${detections.length} detections, ${eggRecords.length} egg records, ` +
-        `${records.ducks} ducks, ${records.events} mating events`,
+        `${records.events} mating events`,
     );
   } catch (err) {
     detectionsCol = null;

@@ -19,7 +19,6 @@ import {
 } from "@raydenui/ui";
 import { plusIcon } from "@raydenui/ui/icons";
 import { api } from "../api/client";
-import { duckLabel, useDucks } from "../api/useDucks";
 import { BEHAVIOR_HEX, behaviorBadgeColor } from "../behavior";
 
 const EGG_BEHAVIORS = ["Receptive", "Neutral", "Non-receptive"];
@@ -45,8 +44,6 @@ export default function EggQuality() {
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
   const [deletingId, setDeletingId] = useState(null);
   const [deleteError, setDeleteError] = useState(null);
-  const { ducks } = useDucks();
-  const females = ducks.filter((d) => d.sex === "female");
 
   useEffect(() => {
     api
@@ -141,29 +138,12 @@ export default function EggQuality() {
           <CardBody className="p-6">
             <form onSubmit={handleAdd} className="space-y-6">
               <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-                {/* Pick from the shared duck list so names match Mating Events.
-                    Falls back to typing if the list can't load. */}
-                {females.length > 0 ? (
-                  <Select
-                    label="Duck"
-                    value={form.duck}
-                    placeholder="Choose a female"
-                    onValueChange={(duck) => setForm({ ...form, duck })}
-                  >
-                    {females.map((d) => (
-                      <SelectOption key={d.id} value={d.id}>
-                        {`${d.id} · ${d.name}`}
-                      </SelectOption>
-                    ))}
-                  </Select>
-                ) : (
-                  <Input
-                    label="Duck"
-                    value={form.duck}
-                    onChange={(e) => setForm({ ...form, duck: e.target.value })}
-                    placeholder="e.g. F1"
-                  />
-                )}
+                <Input
+                  label="Duck"
+                  value={form.duck}
+                  onChange={(e) => setForm({ ...form, duck: e.target.value })}
+                  placeholder="e.g. Duck 1"
+                />
                 <Select
                   label="Behavior class"
                   value={form.behavior}
@@ -251,8 +231,8 @@ export default function EggQuality() {
                 const color = BEHAVIOR_HEX[d.behavior] ?? "#98A2B3";
                 return (
                   <div key={d.id} className="flex items-center gap-4">
-                    <div className="w-28 shrink-0 text-body-sm text-grey-700 text-right truncate">
-                      {duckLabel(ducks, d.duck)}
+                    <div className="w-20 shrink-0 text-body-sm text-grey-700 text-right truncate">
+                      {d.duck}
                     </div>
                     <div className="flex-1 h-7 rounded-md bg-grey-100 overflow-hidden">
                       <div
@@ -304,7 +284,7 @@ export default function EggQuality() {
               )}
               {data.map((d) => (
                 <TableRow key={d.id}>
-                  <TableCell className="font-medium text-grey-900">{duckLabel(ducks, d.duck)}</TableCell>
+                  <TableCell className="font-medium text-grey-900">{d.duck}</TableCell>
                   <TableCell>
                     <Badge color={behaviorBadgeColor(d.behavior)} size="sm">
                       {d.behavior}
