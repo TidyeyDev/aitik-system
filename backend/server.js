@@ -285,27 +285,29 @@ app.get("/frame-boxes/:camId", (req, res) => {
 
 app.get("/eggs", (req, res) => res.json(eggRecords));
 
-app.post("/eggs", async (req, res) => {
-  const duck = typeof req.body.duck === "string" ? req.body.duck.trim() : "";
-  const { behavior, date } = req.body;
-  const weight = Number(req.body.weight);
+// Validates an egg record body; returns { error } or { fields }
+function parseEggBody(body) {
+  const duck = typeof body.duck === "string" ? body.duck.trim() : "";
+  const { behavior, date } = body;
+  const weight = Number(body.weight);
 
-  if (!duck) return res.status(400).json({ error: "duck is required" });
-  if (!EGG_BEHAVIORS.includes(behavior))
-    return res.status(400).json({ error: "invalid behavior" });
+  if (!duck) return { error: "duck is required" };
+  if (!EGG_BEHAVIORS.includes(behavior)) return { error: "invalid behavior" };
   if (!Number.isFinite(weight) || weight <= 0)
-    return res.status(400).json({ error: "weight must be a positive number" });
+    return { error: "weight must be a positive number" };
   if (typeof date !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(date))
-    return res.status(400).json({ error: "date must be YYYY-MM-DD" });
+    return { error: "date must be YYYY-MM-DD" };
 
-  const doc = {
-    duck,
-    behavior,
-    weight,
-    sizeCategory: eggSizeCategory(weight),
-    date,
-    createdAt: new Date().toISOString(),
+  return {
+    fields: { duck, behavior, weight, sizeCategory: eggSizeCategory(weight), date },
   };
+}
+
+app.post("/eggs", async (req, res) => {
+  const { error, fields } = parseEggBody(req.body);
+  if (error) return res.status(400).json({ error });
+
+  const doc = { ...fields, createdAt: new Date().toISOString() };
 
   let record;
   if (eggRecordsCol) {
@@ -321,6 +323,38 @@ app.post("/eggs", async (req, res) => {
   }
 
   eggRecords.push(record);
+  eggRecords.sort((a, b) => a.date.localeCompare(b.date));
+  res.json({ success: true, record });
+});
+
+app.put("/eggs/:id", async (req, res) => {
+  const { id } = req.params;
+  const { error, fields } = parseEggBody(req.body);
+  if (error) return res.status(400).json({ error });
+
+  const index = eggRecords.findIndex((r) => r.id === id);
+
+  if (eggRecordsCol) {
+    if (!ObjectId.isValid(id))
+      return res.status(404).json({ error: "record not found" });
+    try {
+      const { matchedCount } = await eggRecordsCol.updateOne(
+        { _id: new ObjectId(id) },
+        { $set: fields },
+      );
+      if (matchedCount === 0)
+        return res.status(404).json({ error: "record not found" });
+    } catch (err) {
+      console.error("Failed to update egg record:", err.message);
+      return res.status(500).json({ error: "storage failed" });
+    }
+  } else if (index === -1) {
+    return res.status(404).json({ error: "record not found" });
+  }
+
+  const record = { ...(eggRecords[index] ?? { id }), ...fields };
+  if (index !== -1) eggRecords[index] = record;
+  else eggRecords.push(record);
   eggRecords.sort((a, b) => a.date.localeCompare(b.date));
   res.json({ success: true, record });
 });

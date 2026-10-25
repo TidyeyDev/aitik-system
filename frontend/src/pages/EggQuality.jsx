@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Trash2 } from "lucide-react";
+import { Pencil, Trash2 } from "lucide-react";
 import {
   Badge,
   Button,
@@ -38,6 +38,7 @@ export default function EggQuality() {
   const [data, setData] = useState([]);
   const [form, setForm] = useState(EMPTY_FORM);
   const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState(null);
   const [loadState, setLoadState] = useState("loading");
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState(null);
@@ -75,14 +76,15 @@ export default function EggQuality() {
     }
     setSaving(true);
     setSaveError(null);
-    api
-      .post("/eggs", { ...form, weight: parseFloat(form.weight) })
+    const body = { ...form, weight: parseFloat(form.weight) };
+    (editingId ? api.put(`/eggs/${editingId}`, body) : api.post("/eggs", body))
       .then((res) => {
         setData((prev) =>
-          [...prev, res.data.record].sort((a, b) => a.date.localeCompare(b.date)),
+          [...prev.filter((r) => r.id !== editingId), res.data.record].sort((a, b) =>
+            a.date.localeCompare(b.date),
+          ),
         );
-        setForm(EMPTY_FORM);
-        setShowForm(false);
+        closeForm();
       })
       .catch((err) =>
         setSaveError(
@@ -92,6 +94,21 @@ export default function EggQuality() {
         ),
       )
       .finally(() => setSaving(false));
+  };
+
+  const closeForm = () => {
+    setForm(EMPTY_FORM);
+    setEditingId(null);
+    setShowForm(false);
+    setSaveError(null);
+  };
+
+  const startEdit = (d) => {
+    setForm({ duck: d.duck, behavior: d.behavior, weight: String(d.weight), date: d.date });
+    setEditingId(d.id);
+    setSaveError(null);
+    setShowForm(true);
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   const handleDelete = (id) => {
@@ -134,7 +151,7 @@ export default function EggQuality() {
 
       {showForm && (
         <Card shadow="md">
-          <CardHeader title="New egg record" bordered />
+          <CardHeader title={editingId ? "Edit egg record" : "New egg record"} bordered />
           <CardBody className="p-6">
             <form onSubmit={handleAdd} className="space-y-6">
               <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
@@ -173,17 +190,14 @@ export default function EggQuality() {
               {saveError && <p className="text-body-sm text-error-600">{saveError}</p>}
               <div className="flex gap-3">
                 <Button type="submit" variant="primary" disabled={saving} className="h-11">
-                  {saving ? "Saving…" : "Save record"}
+                  {saving ? "Saving…" : editingId ? "Save changes" : "Save record"}
                 </Button>
                 <Button
                   type="button"
                   variant="grey"
                   appearance="outlined"
                   className="h-11"
-                  onClick={() => {
-                    setShowForm(false);
-                    setSaveError(null);
-                  }}
+                  onClick={closeForm}
                 >
                   Cancel
                 </Button>
@@ -327,20 +341,33 @@ export default function EggQuality() {
                         </Button>
                       </div>
                     ) : (
-                      <Button
-                        variant="grey"
-                        appearance="outlined"
-                        size="sm"
-                        iconPosition="icon-only"
-                        icon={<Trash2 size={16} />}
-                        aria-label={`Delete record for ${d.duck} on ${d.date}`}
-                        title="Delete record"
-                        className="size-11"
-                        onClick={() => {
-                          setConfirmDeleteId(d.id);
-                          setDeleteError(null);
-                        }}
-                      />
+                      <div className="flex items-center justify-end gap-2">
+                        <Button
+                          variant="grey"
+                          appearance="outlined"
+                          size="sm"
+                          iconPosition="icon-only"
+                          icon={<Pencil size={16} />}
+                          aria-label={`Edit record for ${d.duck} on ${d.date}`}
+                          title="Edit record"
+                          className="size-11"
+                          onClick={() => startEdit(d)}
+                        />
+                        <Button
+                          variant="grey"
+                          appearance="outlined"
+                          size="sm"
+                          iconPosition="icon-only"
+                          icon={<Trash2 size={16} />}
+                          aria-label={`Delete record for ${d.duck} on ${d.date}`}
+                          title="Delete record"
+                          className="size-11"
+                          onClick={() => {
+                            setConfirmDeleteId(d.id);
+                            setDeleteError(null);
+                          }}
+                        />
+                      </div>
                     )}
                     {deleteError?.id === d.id && (
                       <div className="text-body-xs text-error-600 mt-1">
