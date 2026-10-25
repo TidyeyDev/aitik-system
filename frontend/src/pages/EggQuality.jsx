@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Pencil, Trash2 } from "lucide-react";
 import {
   Badge,
@@ -18,7 +18,7 @@ import {
   TableRow,
 } from "@raydenui/ui";
 import { plusIcon } from "@raydenui/ui/icons";
-import { api } from "../api/client";
+import { api, BACKEND_URL } from "../api/client";
 import { BEHAVIOR_HEX, behaviorBadgeColor } from "../behavior";
 
 const EGG_BEHAVIORS = ["Receptive", "Neutral", "Non-receptive"];
@@ -32,7 +32,34 @@ const SIZE_COLORS = {
   Small: "error",
 };
 
+// form.photo: undefined = keep the saved photo, null = remove it, string = new data URL
 const EMPTY_FORM = { duck: "", behavior: "Receptive", weight: "", date: "" };
+
+// ?v= changes when the photo is replaced, so the browser can cache each version
+const photoUrl = (d) =>
+  `${BACKEND_URL}/eggs/${d.id}/photo?v=${encodeURIComponent(d.photoUpdatedAt)}`;
+
+// Shrinks a photo to max 1280px on the long side as JPEG (~100–300 KB)
+function resizeImage(file) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      const scale = Math.min(1, 1280 / Math.max(img.naturalWidth, img.naturalHeight));
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.round(img.naturalWidth * scale);
+      canvas.height = Math.round(img.naturalHeight * scale);
+      canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
+      URL.revokeObjectURL(url);
+      resolve(canvas.toDataURL("image/jpeg", 0.8));
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error("unreadable image"));
+    };
+    img.src = url;
+  });
+}
 
 export default function EggQuality() {
   const [data, setData] = useState([]);
@@ -45,6 +72,18 @@ export default function EggQuality() {
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
   const [deletingId, setDeletingId] = useState(null);
   const [deleteError, setDeleteError] = useState(null);
+  const [photoBusy, setPhotoBusy] = useState(false);
+  const [viewing, setViewing] = useState(null);
+  const photoInputRef = useRef(null);
+  const dialogRef = useRef(null);
+
+  const editingRecord = data.find((r) => r.id === editingId);
+  const previewSrc =
+    typeof form.photo === "string"
+      ? form.photo
+      : form.photo === undefined && editingRecord?.hasPhoto
+        ? photoUrl(editingRecord)
+        : null;
 
   useEffect(() => {
     api
@@ -109,6 +148,27 @@ export default function EggQuality() {
     setSaveError(null);
     setShowForm(true);
     window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const handlePhotoChange = async (e) => {
+    const file = e.target.files[0];
+    e.target.value = ""; // lets the same file be picked again
+    if (!file) return;
+    setPhotoBusy(true);
+    setSaveError(null);
+    try {
+      const photo = await resizeImage(file);
+      setForm((f) => ({ ...f, photo }));
+    } catch {
+      setSaveError("Couldn't read that image. Try a JPEG or PNG photo.");
+    } finally {
+      setPhotoBusy(false);
+    }
+  };
+
+  const openPhoto = (d) => {
+    setViewing(d);
+    dialogRef.current.showModal();
   };
 
   const handleDelete = (id) => {
@@ -187,9 +247,56 @@ export default function EggQuality() {
                   onChange={(e) => setForm({ ...form, date: e.target.value })}
                 />
               </div>
+              <div>
+                <span className="block text-body-sm font-medium text-grey-700 mb-1.5">
+                  Photo (egg on scale)
+                </span>
+                <input
+                  ref={photoInputRef}
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  className="sr-only"
+                  tabIndex={-1}
+                  aria-hidden="true"
+                  onChange={handlePhotoChange}
+                />
+                <div className="flex flex-wrap items-center gap-3">
+                  {previewSrc && (
+                    <img
+                      src={previewSrc}
+                      alt="Egg photo preview"
+                      className="size-20 rounded-md object-cover border border-grey-200"
+                    />
+                  )}
+                  <Button
+                    type="button"
+                    variant="grey"
+                    appearance="outlined"
+                    className="h-11"
+                    disabled={photoBusy}
+                    onClick={() => photoInputRef.current.click()}
+                  >
+                    {photoBusy ? "Processing…" : previewSrc ? "Replace" : "Add photo"}
+                  </Button>
+                  {previewSrc && (
+                    <Button
+                      type="button"
+                      variant="grey"
+                      appearance="outlined"
+                      className="h-11"
+                      onClick={() =>
+                        setForm({ ...form, photo: editingRecord?.hasPhoto ? null : undefined })
+                      }
+                    >
+                      Remove
+                    </Button>
+                  )}
+                </div>
+              </div>
               {saveError && <p className="text-body-sm text-error-600">{saveError}</p>}
               <div className="flex gap-3">
-                <Button type="submit" variant="primary" disabled={saving} className="h-11">
+                <Button type="submit" variant="primary" disabled={saving || photoBusy} className="h-11">
                   {saving ? "Saving…" : editingId ? "Save changes" : "Save record"}
                 </Button>
                 <Button
@@ -283,6 +390,7 @@ export default function EggQuality() {
                 <TableHead>Weight</TableHead>
                 <TableHead>Size category</TableHead>
                 <TableHead>Date</TableHead>
+                <TableHead>Photo</TableHead>
                 <TableHead>
                   <span className="sr-only">Actions</span>
                 </TableHead>
@@ -291,7 +399,7 @@ export default function EggQuality() {
             <TableBody>
               {data.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={6} className="py-10 text-center text-grey-500">
+                  <TableCell colSpan={7}className="py-10 text-center text-grey-500">
                     {emptyMessage}
                   </TableCell>
                 </TableRow>
@@ -311,6 +419,25 @@ export default function EggQuality() {
                     </Badge>
                   </TableCell>
                   <TableCell>{d.date}</TableCell>
+                  <TableCell>
+                    {d.hasPhoto ? (
+                      <button
+                        type="button"
+                        onClick={() => openPhoto(d)}
+                        aria-label={`View photo for ${d.duck} on ${d.date}`}
+                        className="block size-11 overflow-hidden rounded-md border border-grey-200 cursor-zoom-in"
+                      >
+                        <img
+                          src={photoUrl(d)}
+                          alt=""
+                          loading="lazy"
+                          className="size-full object-cover"
+                        />
+                      </button>
+                    ) : (
+                      <span className="text-grey-500">—</span>
+                    )}
+                  </TableCell>
                   <TableCell className="text-right whitespace-nowrap">
                     {confirmDeleteId === d.id ? (
                       <div className="flex items-center justify-end gap-2">
@@ -381,6 +508,39 @@ export default function EggQuality() {
           </Table>
         </div>
       </Card>
+
+      {/* Native dialog: Esc, focus trap and backdrop for free; click outside closes */}
+      <dialog
+        ref={dialogRef}
+        onClose={() => setViewing(null)}
+        onClick={(e) => e.target === e.currentTarget && dialogRef.current.close()}
+        className="m-auto w-[min(92vw,960px)] rounded-lg p-0 bg-white backdrop:bg-black/70"
+      >
+        {viewing && (
+          <figure>
+            <img
+              src={photoUrl(viewing)}
+              alt={`Egg from ${viewing.duck} on the scale`}
+              className="block w-full max-h-[78vh] object-contain bg-grey-900"
+            />
+            <figcaption className="flex items-center justify-between gap-4 p-4">
+              <span className="text-body-md text-grey-900">
+                <span className="font-semibold">{viewing.duck}</span> · {viewing.weight}g ·{" "}
+                {viewing.date}
+              </span>
+              <Button
+                variant="grey"
+                appearance="outlined"
+                size="sm"
+                className="h-11"
+                onClick={() => dialogRef.current.close()}
+              >
+                Close
+              </Button>
+            </figcaption>
+          </figure>
+        )}
+      </dialog>
     </div>
   );
 }

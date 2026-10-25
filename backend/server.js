@@ -12,7 +12,7 @@ const io = new Server(server, {
 });
 
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: "5mb" }));
 
 // Latest detections, newest first. Mirrors MongoDB when connected,
 // otherwise it is the only copy and is lost on restart.
@@ -20,7 +20,10 @@ let detections = [];
 let tunnelUrl = null;
 
 // Egg weight records, oldest first. Same persistence rules as detections.
+// Never holds photo data (only hasPhoto); photos stay in MongoDB, or in
+// eggPhotos (id -> data URL) when running on memory only.
 let eggRecords = [];
+const eggPhotos = new Map();
 
 // Set by initStorage() when MONGODB_URI is configured and reachable
 let detectionsCol = null;
@@ -40,6 +43,11 @@ let systemStatus = {
 function toDetection(doc) {
   const { _id, ...rest } = doc;
   return { id: _id.toString(), ...rest };
+}
+
+function toEggRecord(doc) {
+  const { photo, ...rest } = toDetection(doc);
+  return { ...rest, hasPhoto: Boolean(rest.photoUpdatedAt) };
 }
 
 const EGG_BEHAVIORS = ["Receptive", "Neutral", "Non-receptive"];
@@ -84,10 +92,10 @@ async function initStorage() {
     }
 
     const eggDocs = await eggRecordsCol
-      .find()
+      .find({}, { projection: { photo: 0 } })
       .sort({ date: 1, createdAt: 1 })
       .toArray();
-    eggRecords = eggDocs.map(toDetection);
+    eggRecords = eggDocs.map(toEggRecord);
 
     const saved = await settingsCol.findOne({ _id: "tunnelUrl" });
     if (saved) tunnelUrl = saved.value;
@@ -303,23 +311,43 @@ function parseEggBody(body) {
   };
 }
 
+// Raster types only: an SVG served from this origin could run script
+const PHOTO_DATA_URL = /^data:(image\/(?:jpeg|png|webp|gif));base64,([A-Za-z0-9+/=]+)$/;
+const MAX_PHOTO_BYTES = 2 * 1024 * 1024;
+
+// Optional photo field: undefined = leave as is, null = remove, string = new photo
+function parsePhoto(body) {
+  const { photo } = body;
+  if (photo === undefined || photo === null) return { photo };
+  const match = typeof photo === "string" && PHOTO_DATA_URL.exec(photo);
+  if (!match) return { error: "photo must be a JPEG, PNG, WebP or GIF data URL" };
+  if (Buffer.byteLength(match[2], "base64") > MAX_PHOTO_BYTES)
+    return { error: "photo must be 2 MB or smaller" };
+  return { photo };
+}
+
 app.post("/eggs", async (req, res) => {
   const { error, fields } = parseEggBody(req.body);
   if (error) return res.status(400).json({ error });
+  const { error: photoError, photo } = parsePhoto(req.body);
+  if (photoError) return res.status(400).json({ error: photoError });
 
-  const doc = { ...fields, createdAt: new Date().toISOString() };
+  const now = new Date().toISOString();
+  const doc = { ...fields, createdAt: now };
+  if (photo) Object.assign(doc, { photo, photoUpdatedAt: now });
 
   let record;
   if (eggRecordsCol) {
     try {
       const { insertedId } = await eggRecordsCol.insertOne(doc);
-      record = toDetection({ _id: insertedId, ...doc });
+      record = toEggRecord({ _id: insertedId, ...doc });
     } catch (err) {
       console.error("Failed to save egg record:", err.message);
       return res.status(500).json({ error: "storage failed" });
     }
   } else {
-    record = { id: String(Date.now()), ...doc };
+    record = toEggRecord({ _id: String(Date.now()), ...doc });
+    if (photo) eggPhotos.set(record.id, photo);
   }
 
   eggRecords.push(record);
@@ -331,16 +359,22 @@ app.put("/eggs/:id", async (req, res) => {
   const { id } = req.params;
   const { error, fields } = parseEggBody(req.body);
   if (error) return res.status(400).json({ error });
+  const { error: photoError, photo } = parsePhoto(req.body);
+  if (photoError) return res.status(400).json({ error: photoError });
 
   const index = eggRecords.findIndex((r) => r.id === id);
+  const photoUpdatedAt = photo ? new Date().toISOString() : undefined;
 
   if (eggRecordsCol) {
     if (!ObjectId.isValid(id))
       return res.status(404).json({ error: "record not found" });
+    const update = { $set: { ...fields } };
+    if (photo) Object.assign(update.$set, { photo, photoUpdatedAt });
+    if (photo === null) update.$unset = { photo: "", photoUpdatedAt: "" };
     try {
       const { matchedCount } = await eggRecordsCol.updateOne(
         { _id: new ObjectId(id) },
-        { $set: fields },
+        update,
       );
       if (matchedCount === 0)
         return res.status(404).json({ error: "record not found" });
@@ -353,6 +387,15 @@ app.put("/eggs/:id", async (req, res) => {
   }
 
   const record = { ...(eggRecords[index] ?? { id }), ...fields };
+  if (photo !== undefined) {
+    if (photo) record.photoUpdatedAt = photoUpdatedAt;
+    else delete record.photoUpdatedAt;
+    record.hasPhoto = Boolean(photo);
+    if (eggRecordsCol) {
+      // MongoDB holds the photo
+    } else if (photo) eggPhotos.set(id, photo);
+    else eggPhotos.delete(id);
+  }
   if (index !== -1) eggRecords[index] = record;
   else eggRecords.push(record);
   eggRecords.sort((a, b) => a.date.localeCompare(b.date));
@@ -381,7 +424,36 @@ app.delete("/eggs/:id", async (req, res) => {
   }
 
   if (index !== -1) eggRecords.splice(index, 1);
+  eggPhotos.delete(id);
   res.json({ success: true });
+});
+
+app.get("/eggs/:id/photo", async (req, res) => {
+  const { id } = req.params;
+  let photo = eggPhotos.get(id);
+  if (eggRecordsCol) {
+    if (!ObjectId.isValid(id)) return res.status(404).json({ error: "photo not found" });
+    try {
+      const doc = await eggRecordsCol.findOne(
+        { _id: new ObjectId(id) },
+        { projection: { photo: 1 } },
+      );
+      photo = doc?.photo;
+    } catch (err) {
+      console.error("Failed to load egg photo:", err.message);
+      return res.status(500).json({ error: "storage failed" });
+    }
+  }
+  const match = photo && PHOTO_DATA_URL.exec(photo);
+  if (!match) return res.status(404).json({ error: "photo not found" });
+
+  // URLs carry ?v=photoUpdatedAt, so a replaced photo gets a new URL
+  res.set({
+    "Content-Type": match[1],
+    "Cache-Control": "public, max-age=31536000, immutable",
+    "X-Content-Type-Options": "nosniff",
+  });
+  res.send(Buffer.from(match[2], "base64"));
 });
 
 registerRecordRoutes(app);
