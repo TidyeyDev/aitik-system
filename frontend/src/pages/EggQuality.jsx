@@ -26,10 +26,11 @@ const EGG_BEHAVIORS = ["Receptive", "Neutral", "Non-receptive"];
 // Size category is calculated by the backend (server.js eggSizeCategory);
 // the page only maps the stored label to a badge colour.
 const SIZE_COLORS = {
-  Jumbo: "blue",
-  Large: "success",
-  Medium: "warning",
-  Small: "error",
+  Jumbo:         "blue",
+  "Extra Large": "purple",
+  Large:         "success",
+  Medium:        "warning",
+  Small:         "error",
 };
 
 // form.photo: undefined = keep the saved photo, null = remove it, string = new data URL
