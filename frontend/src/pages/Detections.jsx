@@ -250,11 +250,6 @@ export default function Detections() {
                       <Badge color={behaviorBadgeColor(d.behavior)} size="sm">
                         {behaviorLabel(d.behavior)}
                       </Badge>
-                      {d.source === "demo" && (
-                        <Badge color="neutral" size="sm">
-                          Demo sample
-                        </Badge>
-                      )}
                       {d.source === "recorded" && (
                         <span title={d.clip ? `Model output on recorded clip: ${d.clip}` : undefined}>
                           <Badge color="neutral" size="sm">
