@@ -72,8 +72,8 @@ const EGG_BEHAVIORS = ["Receptive", "Neutral", "Non-receptive"];
 
 // PNS/BAFS 321:2021 duck egg size categories.
 function eggSizeCategory(weight) {
-
-  if (weight >= 65) return "Extra Large";
+  if (weight >= 76) return "Jumbo";
+  if (weight >= 70) return "Extra Large";
   if (weight >= 60) return "Large";
   if (weight >= 55) return "Medium";
   return "Small";
