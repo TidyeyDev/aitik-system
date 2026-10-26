@@ -52,7 +52,7 @@ function draw(canvas, img, detection) {
     typeof confidence === "number"
       ? `${behavior} ${(confidence * 100).toFixed(0)}%`
       : String(behavior);
-  ctx.font = "600 12px system-ui, sans-serif";
+  ctx.font = "bold 13px Impact, Arial Narrow, sans-serif";
   ctx.textBaseline = "top";
   const padX = 4;
   const labelH = 16;

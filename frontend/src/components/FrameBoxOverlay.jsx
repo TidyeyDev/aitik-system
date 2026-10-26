@@ -58,7 +58,7 @@ function draw(canvas, video, data, fit) {
   ctx.beginPath();
   ctx.rect(0, 0, cssW, cssH);
   ctx.clip();
-  ctx.font = "600 12px system-ui, sans-serif";
+  ctx.font = "bold 13px Impact, Arial Narrow, sans-serif";
   ctx.textBaseline = "top";
   ctx.lineWidth = 2;
 
