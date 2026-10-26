@@ -1,11 +1,13 @@
 import { useEffect, useRef } from "react";
+import { BEHAVIOR_HEX } from "../behavior";
 
 // Same colors as the Live Monitor's FrameBoxOverlay (matched case-insensitively).
+// Same colors as the badges and charts (behavior.js BEHAVIOR_HEX).
 const COLORS = {
-  neutral: "#f59e0b", // yellow
-  mating: "#818cf8", // blue
-  "non-receptive": "#f43f5e", // red
-  receptive: "#10b981", // green
+  mating: BEHAVIOR_HEX.Mating, // blue
+  receptive: BEHAVIOR_HEX.Receptive, // green
+  "non-receptive": BEHAVIOR_HEX["Non-receptive"], // red
+  neutral: BEHAVIOR_HEX.Neutral, // amber
 };
 const FALLBACK_COLOR = "#ffffff";
 
