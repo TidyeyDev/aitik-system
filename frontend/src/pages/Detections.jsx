@@ -144,8 +144,8 @@ export default function Detections() {
         <h1 className="font-heading text-h4 text-grey-900">Detections</h1>
         <p className="text-body-md text-grey-700 mt-1">
           Behavioral detection log — Objective 2. The model classifies behavior only;
-          each detection is saved with a snapshot. Entries marked “Recorded clip” are
-          the same model run on pre-recorded footage; “Demo sample” entries were added
+          each detection is saved with a snapshot. Entries marked "Recorded clip" are
+          the same model run on pre-recorded footage; "Demo sample" entries were added
           by hand to show how each class appears.
         </p>
       </div>
@@ -265,8 +265,8 @@ export default function Detections() {
             <h2 id="demo-title" className="font-heading text-h6 text-grey-900">
               Add demo sample
             </h2>
-            <p className=”text-body-sm text-grey-600 mt-1”>
-              Shown in the log with a “Demo sample” badge. Confidence is what you
+            <p className="text-body-sm text-grey-600 mt-1">
+              Shown in the log with a "Demo sample" badge. Confidence is what you
               enter here, not model output. Snapshot is optional. Not counted on the Dashboard.
             </p>
           </div>
