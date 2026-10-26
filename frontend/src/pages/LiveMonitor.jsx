@@ -8,8 +8,8 @@ import FrameBoxOverlay from "../components/FrameBoxOverlay";
 // is sent to Telegram automatically. "recording" cameras only record egg
 // footage on the Pi, so they have no stream to play.
 const cameras = [
-  { id: "cam1", label: "Camera 1", position: "North", mode: "live" },
-  { id: "cam2", label: "Camera 2", position: "South", mode: "live" },
+  { id: "cam1", label: "Camera 1", position: "North", mode: "recording" },
+  { id: "cam2", label: "Camera 2", position: "South", mode: "recording" },
   { id: "cam3", label: "Camera 3", position: "East", mode: "live" },
   { id: "cam4", label: "Camera 4", position: "West", mode: "live" },
 ];
