@@ -15,6 +15,7 @@ import {
   TableHeader,
   TableRow,
 } from "@raydenui/ui";
+import { plusIcon } from "@raydenui/ui/icons";
 import { api, socket } from "../api/client";
 import SnapshotImage from "../components/SnapshotImage";
 import { useTunnelUrl } from "../api/useTunnelUrl";
@@ -196,11 +197,13 @@ export default function Detections() {
                 variant="grey"
                 appearance="outlined"
                 size="sm"
-                className="h-11"
+                iconPosition="icon-only"
+                icon={plusIcon}
+                aria-label="Add demo sample"
+                title="Add demo sample"
+                className="size-11"
                 onClick={openDemo}
-              >
-                Add demo sample
-              </Button>
+              />
             </div>
           }
           bordered
