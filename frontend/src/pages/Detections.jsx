@@ -38,7 +38,7 @@ export default function Detections() {
       .catch(() => {});
 
     socket.on("new_detection", (detection) => {
-      setDetections((prev) => [detection, ...prev].slice(0, 50));
+      setDetections((prev) => [detection, ...prev]);
     });
 
     return () => {

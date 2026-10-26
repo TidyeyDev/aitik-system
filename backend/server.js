@@ -3,6 +3,7 @@ const http = require("http");
 const { Server } = require("socket.io");
 const cors = require("cors");
 const { MongoClient, ObjectId } = require("mongodb");
+const { createClient } = require("@supabase/supabase-js");
 const { initRecords, registerRecordRoutes } = require("./records");
 
 const app = express();
@@ -14,14 +15,12 @@ const io = new Server(server, {
 app.use(cors());
 app.use(express.json({ limit: "5mb" }));
 
-// Latest detections, newest first. Mirrors MongoDB when connected,
+// Latest detections, newest first. Mirrors storage when connected,
 // otherwise it is the only copy and is lost on restart.
 let detections = [];
 let tunnelUrl = null;
 
-// Egg weight records, oldest first. Same persistence rules as detections.
-// Never holds photo data (only hasPhoto); photos stay in MongoDB, or in
-// eggPhotos (id -> data URL) when running on memory only.
+// Egg weight records, oldest first.
 let eggRecords = [];
 const eggPhotos = new Map();
 
@@ -29,6 +28,9 @@ const eggPhotos = new Map();
 let detectionsCol = null;
 let settingsCol = null;
 let eggRecordsCol = null;
+
+// Set by initStorage() when SUPABASE_URL + SUPABASE_ANON_KEY are configured
+let supabase = null;
 
 // Only report what the backend actually knows; null means "not reported yet"
 let systemStatus = {
@@ -50,10 +52,25 @@ function toEggRecord(doc) {
   return { ...rest, hasPhoto: Boolean(rest.photoUpdatedAt) };
 }
 
+// Convert a Supabase detections row to the detection object used throughout
+function rowToDetection(row) {
+  return {
+    id: String(row.id),
+    behavior: row.behavior,
+    confidence: row.confidence != null ? Number(row.confidence) : null,
+    camera: row.camera_id,
+    snapshot: row.snapshot ?? null,
+    bbox: row.bbox ?? null,
+    frame: null,
+    frameId: null,
+    capturedAt: null,
+    timestamp: row.created_at,
+  };
+}
+
 const EGG_BEHAVIORS = ["Receptive", "Neutral", "Non-receptive"];
 
-// PNS/BAFS 321:2021 size categories. Single source of truth: the frontend
-// displays the stored sizeCategory rather than recalculating it.
+// PNS/BAFS 321:2021 size categories.
 function eggSizeCategory(weight) {
   if (weight >= 70) return "Jumbo";
   if (weight >= 65) return "Large";
@@ -62,34 +79,68 @@ function eggSizeCategory(weight) {
 }
 
 async function initStorage() {
+  // ── Supabase (primary detection storage) ─────────────────────────────────
+  const sbUrl = process.env.SUPABASE_URL;
+  const sbKey = process.env.SUPABASE_ANON_KEY;
+  if (sbUrl && sbKey) {
+    try {
+      supabase = createClient(sbUrl, sbKey);
+      const { data, error } = await supabase
+        .from("detections")
+        .select("*")
+        .order("created_at", { ascending: false })
+        .limit(100);
+      if (error) throw error;
+      detections = data.map(rowToDetection);
+      if (detections.length > 0) {
+        systemStatus.modelDeployed = true;
+        systemStatus.lastDetectionAt = detections[0].timestamp;
+        systemStatus.lastSeen = detections[0].timestamp;
+      }
+      systemStatus.storage = "supabase";
+      console.log(`Supabase connected: loaded ${detections.length} detections`);
+    } catch (err) {
+      supabase = null;
+      console.error("Supabase connection failed, using memory:", err.message);
+    }
+  }
+
+  // ── MongoDB (egg records, settings, mating events) ────────────────────────
   const uri = process.env.MONGODB_URI;
   if (!uri) {
-    console.warn(
-      "MONGODB_URI not set: detections and egg records are kept in memory only",
-    );
+    if (!supabase) {
+      console.warn(
+        "Neither SUPABASE_URL nor MONGODB_URI set: all data is kept in memory only",
+      );
+    }
     return;
   }
   try {
     const client = new MongoClient(uri, { serverSelectionTimeoutMS: 10000 });
     await client.connect();
     const db = client.db(process.env.MONGODB_DB || "aitik");
-    detectionsCol = db.collection("detections");
+
+    // Only use MongoDB for detections when Supabase is not available
+    if (!supabase) {
+      detectionsCol = db.collection("detections");
+      await detectionsCol.createIndex({ timestamp: -1 });
+      const docs = await detectionsCol
+        .find()
+        .sort({ timestamp: -1 })
+        .limit(100)
+        .toArray();
+      detections = docs.map(toDetection);
+      if (detections.length > 0) {
+        systemStatus.modelDeployed = true;
+        systemStatus.lastDetectionAt = detections[0].timestamp;
+        systemStatus.lastSeen = detections[0].timestamp;
+      }
+      systemStatus.storage = "mongodb";
+    }
+
     settingsCol = db.collection("settings");
     eggRecordsCol = db.collection("eggRecords");
-    await detectionsCol.createIndex({ timestamp: -1 });
     await eggRecordsCol.createIndex({ date: 1, createdAt: 1 });
-
-    const docs = await detectionsCol
-      .find()
-      .sort({ timestamp: -1 })
-      .limit(100)
-      .toArray();
-    detections = docs.map(toDetection);
-    if (detections.length > 0) {
-      systemStatus.modelDeployed = true;
-      systemStatus.lastDetectionAt = detections[0].timestamp;
-      systemStatus.lastSeen = detections[0].timestamp;
-    }
 
     const eggDocs = await eggRecordsCol
       .find({}, { projection: { photo: 0 } })
@@ -102,16 +153,17 @@ async function initStorage() {
 
     const records = await initRecords(db);
 
-    systemStatus.storage = "mongodb";
+    if (supabase) systemStatus.storage = "supabase+mongodb";
     console.log(
-      `MongoDB connected: loaded ${detections.length} detections, ${eggRecords.length} egg records, ` +
-        `${records.events} mating events`,
+      `MongoDB connected: ${eggRecords.length} egg records, ${records.events} mating events`,
     );
   } catch (err) {
-    detectionsCol = null;
+    if (!supabase) {
+      detectionsCol = null;
+    }
     settingsCol = null;
     eggRecordsCol = null;
-    console.error("MongoDB connection failed, using memory:", err.message);
+    console.error("MongoDB connection failed:", err.message);
   }
 }
 
@@ -139,7 +191,23 @@ app.get("/", (req, res) => {
   res.json({ status: "AI-TIK Backend Running", version: "1.0.0" });
 });
 
-app.get("/detections", (req, res) => res.json(detections));
+// Return all detections from Supabase when available; otherwise in-memory
+app.get("/detections", async (req, res) => {
+  if (supabase) {
+    try {
+      const { data, error } = await supabase
+        .from("detections")
+        .select("*")
+        .order("created_at", { ascending: false })
+        .limit(2000);
+      if (error) throw error;
+      return res.json(data.map(rowToDetection));
+    } catch (err) {
+      console.error("Supabase fetch failed, returning memory cache:", err.message);
+    }
+  }
+  res.json(detections);
+});
 
 app.get("/status", async (req, res) => res.json(await getSystemStatus()));
 
@@ -179,7 +247,31 @@ app.post("/detect", async (req, res) => {
   };
 
   let detection;
-  if (detectionsCol) {
+
+  if (supabase) {
+    try {
+      const { data, error } = await supabase
+        .from("detections")
+        .insert({
+          behavior: doc.behavior,
+          confidence: doc.confidence != null ? Number(doc.confidence) : null,
+          camera_id: doc.camera,
+          snapshot: doc.snapshot,
+          bbox: doc.bbox,
+        })
+        .select()
+        .single();
+      if (error) throw error;
+      detection = rowToDetection(data);
+      // Carry frame/capturedAt/frameId for this session's socket clients
+      detection.frame = doc.frame;
+      detection.frameId = doc.frameId;
+      detection.capturedAt = doc.capturedAt;
+    } catch (err) {
+      console.error("Supabase insert failed:", err.message);
+      return res.status(500).json({ success: false, error: "storage failed" });
+    }
+  } else if (detectionsCol) {
     try {
       const { insertedId } = await detectionsCol.insertOne(doc);
       detection = toDetection({ _id: insertedId, ...doc });
@@ -240,10 +332,8 @@ function toTimestamp(value) {
   return Number.isNaN(date.getTime()) ? null : date.toISOString();
 }
 
-// Live boxes for the dashboard overlay. Only the latest frame per camera is
-// kept, in memory, so a freshly opened dashboard can draw boxes right away;
-// an empty boxes list clears that camera.
-const frameBoxes = Object.create(null); // no prototype, so any camera name is a safe key
+// Live boxes for the dashboard overlay.
+const frameBoxes = Object.create(null);
 const MAX_FRAME_BOX_CAMERAS = 32;
 
 app.post("/frame-boxes", (req, res) => {
@@ -447,7 +537,6 @@ app.get("/eggs/:id/photo", async (req, res) => {
   const match = photo && PHOTO_DATA_URL.exec(photo);
   if (!match) return res.status(404).json({ error: "photo not found" });
 
-  // URLs carry ?v=photoUpdatedAt, so a replaced photo gets a new URL
   res.set({
     "Content-Type": match[1],
     "Cache-Control": "public, max-age=31536000, immutable",
