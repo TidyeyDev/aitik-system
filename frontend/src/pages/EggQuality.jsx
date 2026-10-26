@@ -20,6 +20,7 @@ import {
 import { plusIcon } from "@raydenui/ui/icons";
 import { api, BACKEND_URL } from "../api/client";
 import { BEHAVIOR_HEX, behaviorBadgeColor } from "../behavior";
+import { resizeImage } from "../utils/resizeImage";
 
 const EGG_BEHAVIORS = ["Receptive", "Neutral", "Non-receptive"];
 
@@ -42,28 +43,6 @@ const EMPTY_FORM = { duck: "", behavior: "Receptive", weight: "", date: "" };
 // ?v= changes when the photo is replaced, so the browser can cache each version
 const photoUrl = (d) =>
   `${BACKEND_URL}/eggs/${d.id}/photo?v=${encodeURIComponent(d.photoUpdatedAt)}`;
-
-// Shrinks a photo to max 1280px on the long side as JPEG (~100–300 KB)
-function resizeImage(file) {
-  return new Promise((resolve, reject) => {
-    const url = URL.createObjectURL(file);
-    const img = new Image();
-    img.onload = () => {
-      const scale = Math.min(1, 1280 / Math.max(img.naturalWidth, img.naturalHeight));
-      const canvas = document.createElement("canvas");
-      canvas.width = Math.round(img.naturalWidth * scale);
-      canvas.height = Math.round(img.naturalHeight * scale);
-      canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
-      URL.revokeObjectURL(url);
-      resolve(canvas.toDataURL("image/jpeg", 0.8));
-    };
-    img.onerror = () => {
-      URL.revokeObjectURL(url);
-      reject(new Error("unreadable image"));
-    };
-    img.src = url;
-  });
-}
 
 export default function EggQuality() {
   const [data, setData] = useState([]);

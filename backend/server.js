@@ -65,6 +65,8 @@ function rowToDetection(row) {
     frameId: null,
     capturedAt: null,
     timestamp: row.created_at,
+    source: row.source ?? "live",
+    clip: row.clip ?? null,
   };
 }
 
@@ -236,18 +238,35 @@ app.post("/tunnel-url", async (req, res) => {
   res.json({ success: true });
 });
 
+const DEMO_BEHAVIORS = ["mating", "receptive", "non-receptive"];
+
 app.post("/detect", async (req, res) => {
   const { snapshot } = req.body;
+  // "recorded" = model output on a pre-recorded clip (tools/run_clip.py);
+  // "demo" = sample entered by hand on the Detections page, confidence set manually.
+  // Neither is a live camera.
+  const source = ["recorded", "demo"].includes(req.body.source) ? req.body.source : "live";
+  const recorded = source !== "live";
+  const demo = source === "demo";
+  if (demo) {
+    const c = req.body.confidence;
+    if (!DEMO_BEHAVIORS.includes(String(req.body.behavior).toLowerCase()))
+      return res.status(400).json({ success: false, error: "invalid demo behavior" });
+    if (typeof c !== "number" || !(c >= 0 && c <= 1))
+      return res.status(400).json({ success: false, error: "confidence must be 0–1" });
+  }
   const doc = {
     snapshot: typeof snapshot === "string" && snapshot ? snapshot : null,
     behavior: req.body.behavior,
     confidence: req.body.confidence,
     camera: req.body.camera,
+    source,
+    clip: source === "recorded" && typeof req.body.clip === "string" ? req.body.clip.slice(0, 200) : null,
     bbox: toBbox(req.body.bbox),
     frame: toFrame(req.body.frame),
     frameId: toFrameId(req.body.frameId),
     capturedAt: toTimestamp(req.body.capturedAt),
-    timestamp: new Date().toISOString(),
+    timestamp: (demo && toTimestamp(req.body.timestamp)) || new Date().toISOString(),
   };
 
   let detection;
@@ -262,6 +281,9 @@ app.post("/detect", async (req, res) => {
           camera_id: doc.camera,
           snapshot: doc.snapshot,
           bbox: doc.bbox,
+          // Only sent for recorded clips, so live inserts never depend on these columns
+          ...(recorded && { source: doc.source, clip: doc.clip }),
+          ...(demo && { created_at: doc.timestamp }),
         })
         .select()
         .single();
@@ -290,6 +312,8 @@ app.post("/detect", async (req, res) => {
   detections.unshift(detection);
   if (detections.length > 100) detections.pop();
   io.emit("new_detection", detection);
+  // Recorded clips say nothing about the farm right now: no alert, no "last seen"
+  if (recorded) return res.json({ success: true, detection });
   if (detection.behavior === "Receptive") {
     io.emit("alert", {
       message: `Receptive duck detected at ${detection.camera}!`,

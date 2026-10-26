@@ -206,13 +206,16 @@ export default function Dashboard() {
     const statusTimer = setInterval(loadStatus, 60000);
     socket.on("status", setStatus);
 
+    // The dashboard is the live farm view; recorded-clip and demo detections
+    // only appear on the Detections page.
+    const isLive = (d) => !d.source || d.source === "live";
     api
       .get("/detections")
-      .then((res) => setDetections(res.data))
+      .then((res) => setDetections(res.data.filter(isLive)))
       .catch(() => {});
 
     socket.on("new_detection", (detection) => {
-      setDetections((prev) => [detection, ...prev].slice(0, 100));
+      if (isLive(detection)) setDetections((prev) => [detection, ...prev].slice(0, 100));
     });
 
     socket.on("alert", (data) => {

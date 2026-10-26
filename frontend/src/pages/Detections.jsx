@@ -1,9 +1,12 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   Badge,
   Button,
   Card,
   CardHeader,
+  Input,
+  Select,
+  SelectOption,
   Table,
   TableBody,
   TableCell,
@@ -21,13 +24,44 @@ import {
   formatConfidence,
   isBehavior,
 } from "../behavior";
+import { resizeImage } from "../utils/resizeImage";
 
 const behaviors = ["All", ...Object.keys(BEHAVIOR_HEX)];
+
+const DEMO_BEHAVIORS = ["Mating", "Receptive", "Non-receptive"];
+const CAMERAS = ["cam1", "cam2", "cam3", "cam4"];
+
+// Current local time in the format <input type="datetime-local"> expects
+const nowLocal = () =>
+  new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+
+const newDemoForm = () => ({
+  snapshot: null,
+  behavior: "Mating",
+  confidence: "85",
+  camera: "cam3",
+  time: nowLocal(),
+});
+
+const newestFirst = (a, b) => new Date(b.timestamp) - new Date(a.timestamp);
 
 export default function Detections() {
   const [filter, setFilter] = useState("All");
   const [detections, setDetections] = useState([]);
+  const [demoForm, setDemoForm] = useState(newDemoForm);
+  const [demoBusy, setDemoBusy] = useState(false);
+  const [demoError, setDemoError] = useState(null);
+  const dialogRef = useRef(null);
+  const fileRef = useRef(null);
   const tunnelUrl = useTunnelUrl();
+
+  // The socket echoes our own demo posts, so skip ids already in the list
+  const addDetection = (detection) =>
+    setDetections((prev) =>
+      prev.some((d) => d.id === detection.id)
+        ? prev
+        : [detection, ...prev].sort(newestFirst),
+    );
 
   useEffect(() => {
     api
@@ -37,9 +71,7 @@ export default function Detections() {
       })
       .catch(() => {});
 
-    socket.on("new_detection", (detection) => {
-      setDetections((prev) => [detection, ...prev]);
-    });
+    socket.on("new_detection", addDetection);
 
     return () => {
       socket.off("new_detection");
@@ -56,13 +88,66 @@ export default function Detections() {
       ? detections
       : detections.filter((d) => isBehavior(d.behavior, filter));
 
+  const openDemo = () => {
+    setDemoForm(newDemoForm());
+    setDemoError(null);
+    dialogRef.current.showModal();
+  };
+
+  const handleSnapshot = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setDemoError(null);
+    try {
+      const snapshot = await resizeImage(file);
+      setDemoForm((f) => ({ ...f, snapshot }));
+    } catch {
+      e.target.value = "";
+      setDemoError("Couldn't read that image. Try a JPEG or PNG.");
+    }
+  };
+
+  const submitDemo = (e) => {
+    e.preventDefault();
+    const confidence = Number(demoForm.confidence);
+    if (!demoForm.snapshot) return setDemoError("Choose a snapshot image.");
+    if (!(confidence >= 0 && confidence <= 100))
+      return setDemoError("Confidence must be between 0 and 100.");
+    if (!demoForm.time) return setDemoError("Set a date and time.");
+    setDemoBusy(true);
+    setDemoError(null);
+    api
+      .post("/detect", {
+        source: "demo",
+        snapshot: demoForm.snapshot,
+        behavior: demoForm.behavior.toLowerCase(),
+        confidence: confidence / 100,
+        camera: demoForm.camera,
+        timestamp: new Date(demoForm.time).toISOString(),
+      })
+      .then((res) => {
+        addDetection(res.data.detection);
+        dialogRef.current.close();
+      })
+      .catch((err) =>
+        setDemoError(
+          err.response?.data?.error
+            ? `Not added: ${err.response.data.error}`
+            : "Not added: couldn't reach the backend.",
+        ),
+      )
+      .finally(() => setDemoBusy(false));
+  };
+
   return (
     <div className="space-y-6">
       <div>
         <h1 className="font-heading text-h4 text-grey-900">Detections</h1>
         <p className="text-body-md text-grey-700 mt-1">
           Behavioral detection log — Objective 2. The model classifies behavior only;
-          each detection is saved with a snapshot.
+          each detection is saved with a snapshot. Entries marked “Recorded clip” are
+          the same model run on pre-recorded footage; “Demo sample” entries were added
+          by hand to show how each class appears.
         </p>
       </div>
 
@@ -85,7 +170,20 @@ export default function Detections() {
       <Card shadow="md">
         <CardHeader
           title="Detection log"
-          actions={<Badge color="neutral">{filtered.length} records</Badge>}
+          actions={
+            <div className="flex items-center gap-3">
+              <Badge color="neutral">{filtered.length} records</Badge>
+              <Button
+                variant="grey"
+                appearance="outlined"
+                size="sm"
+                className="h-11"
+                onClick={openDemo}
+              >
+                Add demo sample
+              </Button>
+            </div>
+          }
           bordered
         />
         <div className="overflow-x-auto">
@@ -123,11 +221,30 @@ export default function Detections() {
                     )}
                   </TableCell>
                   <TableCell>
-                    <Badge color={behaviorBadgeColor(d.behavior)} size="sm">
-                      {behaviorLabel(d.behavior)}
-                    </Badge>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <Badge color={behaviorBadgeColor(d.behavior)} size="sm">
+                        {behaviorLabel(d.behavior)}
+                      </Badge>
+                      {d.source === "demo" && (
+                        <Badge color="neutral" size="sm">
+                          Demo sample
+                        </Badge>
+                      )}
+                      {d.source === "recorded" && (
+                        <span title={d.clip ? `Model output on recorded clip: ${d.clip}` : undefined}>
+                          <Badge color="neutral" size="sm">
+                            Recorded clip
+                          </Badge>
+                        </span>
+                      )}
+                    </div>
                   </TableCell>
-                  <TableCell>{formatConfidence(d.confidence)}</TableCell>
+                  <TableCell className="whitespace-nowrap">
+                    {formatConfidence(d.confidence)}
+                    {d.source === "demo" && (
+                      <span className="text-body-xs text-grey-500"> · set manually</span>
+                    )}
+                  </TableCell>
                   <TableCell>{d.camera}</TableCell>
                   <TableCell className="whitespace-nowrap">
                     {new Date(d.timestamp).toLocaleString()}
@@ -138,6 +255,114 @@ export default function Detections() {
           </Table>
         </div>
       </Card>
+
+      <dialog
+        ref={dialogRef}
+        aria-labelledby="demo-title"
+        className="m-auto w-[min(92vw,520px)] rounded-lg p-0 bg-white backdrop:bg-black/70"
+      >
+        <form onSubmit={submitDemo} className="p-6 space-y-5">
+          <div>
+            <h2 id="demo-title" className="font-heading text-h6 text-grey-900">
+              Add demo sample
+            </h2>
+            <p className="text-body-sm text-grey-600 mt-1">
+              Shown in the log with a “Demo sample” badge. The confidence is what you
+              enter here, not model output. Not counted on the Dashboard.
+            </p>
+          </div>
+
+          <div>
+            <span className="block text-body-sm font-medium text-grey-700 mb-1.5">
+              Snapshot image
+            </span>
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/*"
+              className="sr-only"
+              tabIndex={-1}
+              aria-hidden="true"
+              onChange={handleSnapshot}
+            />
+            <div className="flex items-center gap-3">
+              {demoForm.snapshot && (
+                <img
+                  src={demoForm.snapshot}
+                  alt="Selected snapshot"
+                  className="w-28 aspect-video rounded-md object-cover border border-grey-200"
+                />
+              )}
+              <Button
+                type="button"
+                variant="grey"
+                appearance="outlined"
+                className="h-11"
+                onClick={() => fileRef.current.click()}
+              >
+                {demoForm.snapshot ? "Replace image" : "Choose image"}
+              </Button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Select
+              label="Behavior class"
+              value={demoForm.behavior}
+              onValueChange={(behavior) => setDemoForm({ ...demoForm, behavior })}
+            >
+              {DEMO_BEHAVIORS.map((b) => (
+                <SelectOption key={b} value={b}>
+                  {b}
+                </SelectOption>
+              ))}
+            </Select>
+            <Input
+              label="Confidence (%)"
+              type="number"
+              min="0"
+              max="100"
+              inputMode="decimal"
+              value={demoForm.confidence}
+              onChange={(e) => setDemoForm({ ...demoForm, confidence: e.target.value })}
+            />
+            <Select
+              label="Camera"
+              value={demoForm.camera}
+              onValueChange={(camera) => setDemoForm({ ...demoForm, camera })}
+            >
+              {CAMERAS.map((c) => (
+                <SelectOption key={c} value={c}>
+                  {c}
+                </SelectOption>
+              ))}
+            </Select>
+            <Input
+              label="Date and time"
+              type="datetime-local"
+              value={demoForm.time}
+              onChange={(e) => setDemoForm({ ...demoForm, time: e.target.value })}
+            />
+          </div>
+
+          {demoError && <p className="text-body-sm text-error-600">{demoError}</p>}
+
+          <div className="flex gap-3">
+            <Button type="submit" variant="primary" disabled={demoBusy} className="h-11">
+              {demoBusy ? "Adding…" : "Add to log"}
+            </Button>
+            <Button
+              type="button"
+              variant="grey"
+              appearance="outlined"
+              className="h-11"
+              onClick={() => dialogRef.current.close()}
+            >
+              Cancel
+            </Button>
+          </div>
+        </form>
+      </dialog>
     </div>
   );
 }
