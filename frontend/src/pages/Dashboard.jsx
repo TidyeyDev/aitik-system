@@ -218,6 +218,10 @@ export default function Dashboard() {
       if (isLive(detection)) setDetections((prev) => [detection, ...prev].slice(0, 100));
     });
 
+    socket.on("detection_deleted", ({ id }) =>
+      setDetections((prev) => prev.filter((d) => d.id !== id)),
+    );
+
     socket.on("alert", (data) => {
       setAlert(data.message);
       setTimeout(() => setAlert(null), 8000);
@@ -225,6 +229,7 @@ export default function Dashboard() {
 
     return () => {
       socket.off("new_detection");
+      socket.off("detection_deleted");
       clearInterval(statusTimer);
       socket.off("status", setStatus);
       socket.off("alert");

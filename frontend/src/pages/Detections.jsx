@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { Trash2 } from "lucide-react";
 import {
   Badge,
   Button,
@@ -53,7 +54,12 @@ export default function Detections() {
   const [demoError, setDemoError] = useState(null);
   const dialogRef = useRef(null);
   const fileRef = useRef(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState(null);
+  const [deletingId, setDeletingId] = useState(null);
+  const [deleteError, setDeleteError] = useState(null);
   const tunnelUrl = useTunnelUrl();
+
+  const removeDetection = (id) => setDetections((prev) => prev.filter((d) => d.id !== id));
 
   // The socket echoes our own demo posts, so skip ids already in the list
   const addDetection = (detection) =>
@@ -72,9 +78,11 @@ export default function Detections() {
       .catch(() => {});
 
     socket.on("new_detection", addDetection);
+    socket.on("detection_deleted", ({ id }) => removeDetection(id));
 
     return () => {
       socket.off("new_detection");
+      socket.off("detection_deleted");
     };
   }, []);
 
@@ -87,6 +95,26 @@ export default function Detections() {
     filter === "All"
       ? detections
       : detections.filter((d) => isBehavior(d.behavior, filter));
+
+  const handleDelete = (id) => {
+    setDeletingId(id);
+    setDeleteError(null);
+    api
+      .delete(`/detections/${id}`)
+      .then(() => {
+        removeDetection(id);
+        setConfirmDeleteId(null);
+      })
+      .catch((err) =>
+        setDeleteError({
+          id,
+          message: err.response?.data?.error
+            ? `Not deleted: ${err.response.data.error}`
+            : "Not deleted: couldn't reach the backend.",
+        }),
+      )
+      .finally(() => setDeletingId(null));
+  };
 
   const openDemo = () => {
     setDemoForm(newDemoForm());
@@ -140,15 +168,7 @@ export default function Detections() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="font-heading text-h4 text-grey-900">Detections</h1>
-        <p className="text-body-md text-grey-700 mt-1">
-          Behavioral detection log — Objective 2. The model classifies behavior only;
-          each detection is saved with a snapshot. Entries marked "Recorded clip" are
-          the same model run on pre-recorded footage; "Demo sample" entries were added
-          by hand to show how each class appears.
-        </p>
-      </div>
+      <h1 className="font-heading text-h4 text-grey-900">Detections</h1>
 
       <div className="flex flex-wrap gap-2" role="group" aria-label="Filter by behavior">
         {behaviors.map((b) => (
@@ -194,12 +214,15 @@ export default function Detections() {
                 <TableHead>Confidence</TableHead>
                 <TableHead>Camera</TableHead>
                 <TableHead>Time</TableHead>
+                <TableHead>
+                  <span className="sr-only">Actions</span>
+                </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {filtered.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={5} className="py-10 text-center text-grey-500">
+                  <TableCell colSpan={6} className="py-10 text-center text-grey-500">
                     No detections yet — awaiting YOLO model deployment
                   </TableCell>
                 </TableRow>
@@ -240,13 +263,57 @@ export default function Detections() {
                   </TableCell>
                   <TableCell className="whitespace-nowrap">
                     {formatConfidence(d.confidence)}
-                    {d.source === "demo" && (
-                      <span className="text-body-xs text-grey-500"> · set manually</span>
-                    )}
                   </TableCell>
                   <TableCell>{d.camera}</TableCell>
                   <TableCell className="whitespace-nowrap">
                     {new Date(d.timestamp).toLocaleString()}
+                  </TableCell>
+                  <TableCell className="text-right whitespace-nowrap">
+                    {confirmDeleteId === d.id ? (
+                      <div className="flex items-center justify-end gap-2">
+                        <span className="text-body-xs text-grey-600">Delete this log?</span>
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          onClick={() => handleDelete(d.id)}
+                          disabled={deletingId === d.id}
+                          className="h-11"
+                        >
+                          {deletingId === d.id ? "Deleting…" : "Delete"}
+                        </Button>
+                        <Button
+                          variant="grey"
+                          appearance="outlined"
+                          size="sm"
+                          onClick={() => {
+                            setConfirmDeleteId(null);
+                            setDeleteError(null);
+                          }}
+                          disabled={deletingId === d.id}
+                          className="h-11"
+                        >
+                          Cancel
+                        </Button>
+                      </div>
+                    ) : (
+                      <Button
+                        variant="grey"
+                        appearance="outlined"
+                        size="sm"
+                        iconPosition="icon-only"
+                        icon={<Trash2 size={16} />}
+                        aria-label={`Delete ${behaviorLabel(d.behavior)} log from ${new Date(d.timestamp).toLocaleString()}`}
+                        title="Delete log"
+                        className="size-11"
+                        onClick={() => {
+                          setConfirmDeleteId(d.id);
+                          setDeleteError(null);
+                        }}
+                      />
+                    )}
+                    {deleteError?.id === d.id && (
+                      <div className="text-body-xs text-error-600 mt-1">{deleteError.message}</div>
+                    )}
                   </TableCell>
                 </TableRow>
               ))}

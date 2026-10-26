@@ -520,6 +520,41 @@ app.put("/eggs/:id", async (req, res) => {
   res.json({ success: true, record });
 });
 
+app.delete("/detections/:id", async (req, res) => {
+  const { id } = req.params;
+  const index = detections.findIndex((d) => d.id === id);
+
+  if (supabase) {
+    try {
+      // .select() returns the deleted rows; none back means RLS blocked it or no such id
+      const { data, error } = await supabase.from("detections").delete().eq("id", id).select("id");
+      if (error) throw error;
+      if (!data.length)
+        return res.status(404).json({
+          error: "not deleted: record not found or Supabase has no delete policy",
+        });
+    } catch (err) {
+      console.error("Failed to delete detection:", err.message);
+      return res.status(500).json({ error: "storage failed" });
+    }
+  } else if (detectionsCol) {
+    if (!ObjectId.isValid(id)) return res.status(404).json({ error: "record not found" });
+    try {
+      const { deletedCount } = await detectionsCol.deleteOne({ _id: new ObjectId(id) });
+      if (deletedCount === 0) return res.status(404).json({ error: "record not found" });
+    } catch (err) {
+      console.error("Failed to delete detection:", err.message);
+      return res.status(500).json({ error: "storage failed" });
+    }
+  } else if (index === -1) {
+    return res.status(404).json({ error: "record not found" });
+  }
+
+  if (index !== -1) detections.splice(index, 1);
+  io.emit("detection_deleted", { id });
+  res.json({ success: true });
+});
+
 app.delete("/eggs/:id", async (req, res) => {
   const { id } = req.params;
   const index = eggRecords.findIndex((r) => r.id === id);
