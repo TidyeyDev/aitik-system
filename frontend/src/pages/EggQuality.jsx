@@ -25,12 +25,15 @@ const EGG_BEHAVIORS = ["Receptive", "Neutral", "Non-receptive"];
 
 // Size category is calculated by the backend (server.js eggSizeCategory);
 // the page only maps the stored label to a badge colour.
+// Badge colors — valid RaydenUI values: orange, blue, success, warning, error, neutral, disabled
 const SIZE_COLORS = {
   Jumbo:         "orange",
   "Extra Large": "blue",
   Large:         "success",
   Medium:        "warning",
   Small:         "error",
+  "Extra Small": "neutral",
+  Pullet:        "disabled",
 };
 
 // form.photo: undefined = keep the saved photo, null = remove it, string = new data URL

@@ -71,12 +71,15 @@ function rowToDetection(row) {
 const EGG_BEHAVIORS = ["Receptive", "Neutral", "Non-receptive"];
 
 // PNS/BAFS 321:2021 duck egg size categories.
+// PNS/BAFS 321:2021 Table 4 — duck shell egg weight classification
 function eggSizeCategory(weight) {
-  if (weight >= 76) return "Jumbo";
-  if (weight >= 70) return "Extra Large";
-  if (weight >= 60) return "Large";
-  if (weight >= 55) return "Medium";
-  return "Small";
+  if (weight > 76)  return "Jumbo";        // >76 g
+  if (weight >= 71) return "Extra Large";  // 71–75.9 g
+  if (weight >= 66) return "Large";        // 66–70.9 g
+  if (weight >= 61) return "Medium";       // 61–65.9 g
+  if (weight >= 56) return "Small";        // 56–60.9 g
+  if (weight >= 51) return "Extra Small";  // 51–55.9 g
+  return "Pullet";                         // 45–50.9 g
 }
 
 async function initStorage() {
