@@ -110,7 +110,6 @@ export default function Detections() {
   const submitDemo = (e) => {
     e.preventDefault();
     const confidence = Number(demoForm.confidence);
-    if (!demoForm.snapshot) return setDemoError("Choose a snapshot image.");
     if (!(confidence >= 0 && confidence <= 100))
       return setDemoError("Confidence must be between 0 and 100.");
     if (!demoForm.time) return setDemoError("Set a date and time.");
@@ -259,16 +258,16 @@ export default function Detections() {
       <dialog
         ref={dialogRef}
         aria-labelledby="demo-title"
-        className="m-auto w-[min(92vw,520px)] rounded-lg p-0 bg-white backdrop:bg-black/70"
+        className="m-auto w-[min(92vw,520px)] rounded-lg p-0 bg-surface backdrop:bg-black/70"
       >
         <form onSubmit={submitDemo} className="p-6 space-y-5">
           <div>
             <h2 id="demo-title" className="font-heading text-h6 text-grey-900">
               Add demo sample
             </h2>
-            <p className="text-body-sm text-grey-600 mt-1">
-              Shown in the log with a “Demo sample” badge. The confidence is what you
-              enter here, not model output. Not counted on the Dashboard.
+            <p className=”text-body-sm text-grey-600 mt-1”>
+              Shown in the log with a “Demo sample” badge. Confidence is what you
+              enter here, not model output. Snapshot is optional. Not counted on the Dashboard.
             </p>
           </div>
 
@@ -322,6 +321,7 @@ export default function Detections() {
               type="number"
               min="0"
               max="100"
+              step="any"
               inputMode="decimal"
               value={demoForm.confidence}
               onChange={(e) => setDemoForm({ ...demoForm, confidence: e.target.value })}
