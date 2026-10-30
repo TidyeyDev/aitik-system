@@ -16,7 +16,7 @@ const links = [
   { path: "/", label: "Dashboard", short: "Dashboard", icon: homeIcon, MobileIcon: House },
   { path: "/monitor", label: "Live Monitor", short: "Monitor", icon: videoIcon, MobileIcon: Camera },
   { path: "/detections", label: "Detections", short: "Detections", icon: listIcon, MobileIcon: List },
-  { path: "/mating", label: "Mating Events", short: "Mating", icon: heartIcon, MobileIcon: Heart },
+  { path: "/behavior", label: "Behavior History", short: "Behavior", icon: heartIcon, MobileIcon: Heart },
   { path: "/eggs", label: "Egg Quality", short: "Eggs", icon: chartIcon, MobileIcon: Egg },
   { path: "/about", label: "About Us", short: "About", icon: infoCircleIcon, MobileIcon: Info },
 ];

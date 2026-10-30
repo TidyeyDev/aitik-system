@@ -1,13 +1,11 @@
-import { useState, useEffect, useRef } from "react";
-import { Trash2 } from "lucide-react";
+import { Fragment, useCallback, useState, useEffect, useRef } from "react";
+import { useSearchParams } from "react-router-dom";
+import { Download, Trash2 } from "lucide-react";
 import {
   Badge,
   Button,
   Card,
   CardHeader,
-  Input,
-  Select,
-  SelectOption,
   Table,
   TableBody,
   TableCell,
@@ -15,8 +13,8 @@ import {
   TableHeader,
   TableRow,
 } from "@raydenui/ui";
-import { plusIcon } from "@raydenui/ui/icons";
-import { api, socket } from "../api/client";
+import { api, apiErrorText, BACKEND_URL, socket } from "../api/client";
+import DateRangeCalendar from "../components/DateRangeCalendar";
 import SnapshotImage from "../components/SnapshotImage";
 import { useTunnelUrl } from "../api/useTunnelUrl";
 import {
@@ -26,76 +24,190 @@ import {
   formatConfidence,
   isBehavior,
 } from "../behavior";
-import { resizeImage } from "../utils/resizeImage";
+import { dateRange, dayKey, parseDay, validDay } from "../utils/dateRange";
 
 const behaviors = ["All", ...Object.keys(BEHAVIOR_HEX)];
 
-const DEMO_BEHAVIORS = ["Mating", "Receptive", "Non-receptive"];
-const CAMERAS = ["cam1", "cam2", "cam3", "cam4"];
+const PAGE_SIZE = 100;
 
-// Current local time in the format <input type="datetime-local"> expects
-const nowLocal = () =>
-  new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+const plural = (n) => `${n.toLocaleString()} detection${n === 1 ? "" : "s"}`;
 
-const newDemoForm = () => ({
-  snapshot: null,
-  behavior: "Mating",
-  confidence: "85",
-  camera: "cam3",
-  time: nowLocal(),
-});
-
-const newestFirst = (a, b) => new Date(b.timestamp) - new Date(a.timestamp);
+function formatDates(from, to) {
+  if (!from) return "all dates";
+  const format = new Intl.DateTimeFormat(undefined, { dateStyle: "medium" });
+  return from === to ? format.format(parseDay(from)) : format.formatRange(parseDay(from), parseDay(to));
+}
 
 export default function Detections() {
   const [filter, setFilter] = useState("All");
+  const [searchParams, setSearchParams] = useSearchParams();
   const [detections, setDetections] = useState([]);
-  const [demoForm, setDemoForm] = useState(newDemoForm);
-  const [demoBusy, setDemoBusy] = useState(false);
-  const [demoError, setDemoError] = useState(null);
-  const dialogRef = useRef(null);
-  const fileRef = useRef(null);
+  const [total, setTotal] = useState(0);
+  const [counts, setCounts] = useState({});
+  const [loadState, setLoadState] = useState("loading");
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [moreFailed, setMoreFailed] = useState(false);
+  const [dayCounts, setDayCounts] = useState({});
+  const [version, setVersion] = useState(0); // bumped when detections arrive or are deleted
+  const viewId = useRef(0);
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
   const [deletingId, setDeletingId] = useState(null);
   const [deleteError, setDeleteError] = useState(null);
   const tunnelUrl = useTunnelUrl();
 
-  const removeDetection = (id) => setDetections((prev) => prev.filter((d) => d.id !== id));
+  // The URL holds the selected dates, so a view can be bookmarked or shared
+  const a = validDay(searchParams.get("from"));
+  const b = validDay(searchParams.get("to"));
+  const [from, to] = a && b ? [a, b].sort() : a || b ? [a || b, a || b] : [null, null];
+  const range = from ? dateRange(from, to) : {};
+  const { from: rangeFrom, to: rangeTo } = range;
+  const behaviorParam = filter === "All" ? undefined : filter;
 
-  // The socket echoes our own demo posts, so skip ids already in the list
-  const addDetection = (detection) =>
-    setDetections((prev) =>
-      prev.some((d) => d.id === detection.id)
-        ? prev
-        : [detection, ...prev].sort(newestFirst),
-    );
+  const selectDates = useCallback(
+    (start, end) => {
+      if (!start) return setSearchParams({});
+      const [low, high] = [start, end].sort();
+      setSearchParams({ from: low, to: high });
+    },
+    [setSearchParams],
+  );
+
+  const fetchPage = (offset, limit = PAGE_SIZE) =>
+    api.get("/detections/page", {
+      params: {
+        from: rangeFrom,
+        to: rangeTo,
+        behavior: behaviorParam,
+        offset,
+        limit,
+      },
+    });
 
   useEffect(() => {
-    api
-      .get("/detections")
+    let current = true;
+    const view = ++viewId.current;
+    setLoadState("loading");
+    setMoreFailed(false);
+    fetchPage(0)
       .then((res) => {
-        setDetections(res.data);
+        if (!current) return;
+        setDetections(res.data.rows);
+        setTotal(res.data.total);
+        setCounts(res.data.counts);
+        setLoadState("ready");
       })
-      .catch(() => {});
+      .catch(() => {
+        if (!current) return;
+        setDetections([]);
+        setTotal(0);
+        setLoadState("error");
+      });
 
-    socket.on("new_detection", addDetection);
-    socket.on("detection_deleted", ({ id }) => removeDetection(id));
+    const inRange = (d) => {
+      const time = new Date(d.timestamp).toISOString();
+      return (!rangeFrom || time >= rangeFrom) && (!rangeTo || time < rangeTo);
+    };
+
+    const inView = (d) =>
+      (filter === "All" || isBehavior(d.behavior, filter)) &&
+      inRange(d);
+
+    const onNew = (d) => {
+      setVersion((v) => v + 1);
+      if (!inRange(d)) return;
+      setCounts((c) => {
+        const label = behaviorLabel(d.behavior);
+        return { ...c, All: (c.All ?? 0) + 1, [label]: (c[label] ?? 0) + 1 };
+      });
+      if (!inView(d)) return;
+      setTotal((n) => n + 1);
+      setDetections((prev) => (prev.some((x) => x.id === d.id) ? prev : [d, ...prev]));
+    };
+
+    // Our own deletes come back here too. Counts are re-read: the event only has the id.
+    const onDeleted = ({ id }) => {
+      setDetections((prev) => prev.filter((d) => d.id !== id));
+      setVersion((v) => v + 1);
+      fetchPage(0, 1)
+        .then((res) => {
+          if (!current) return;
+          setTotal(res.data.total);
+          setCounts(res.data.counts);
+        })
+        .catch(() => {});
+    };
+
+    socket.on("new_detection", onNew);
+    socket.on("detection_deleted", onDeleted);
 
     return () => {
-      socket.off("new_detection");
-      socket.off("detection_deleted");
+      current = false;
+      viewId.current = view + 1;
+      socket.off("new_detection", onNew);
+      socket.off("detection_deleted", onDeleted);
     };
-  }, []);
+  }, [filter, rangeFrom, rangeTo]);
 
-  const countOf = (b) =>
-    b === "All"
-      ? detections.length
-      : detections.filter((d) => isBehavior(d.behavior, b)).length;
+  // Totals for the day headers: a day can have more rows than are loaded so far
+  useEffect(() => {
+    let current = true;
+    api
+      .get("/detections/daily-counts", {
+        params: {
+          from: rangeFrom,
+          to: rangeTo,
+          behavior: behaviorParam,
+          tz: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        },
+      })
+      .then((res) => current && setDayCounts(res.data))
+      .catch(() => current && setDayCounts({}));
+    return () => {
+      current = false;
+    };
+  }, [rangeFrom, rangeTo, behaviorParam, version]);
 
-  const filtered =
-    filter === "All"
-      ? detections
-      : detections.filter((d) => isBehavior(d.behavior, filter));
+  // A row arriving between pages shifts the offset, so overlaps are dropped by id
+  const loadMore = () => {
+    const view = viewId.current;
+    setLoadingMore(true);
+    setMoreFailed(false);
+    fetchPage(detections.length)
+      .then((res) => {
+        if (view !== viewId.current) return; // the dates or tab changed meanwhile
+        setTotal(res.data.total);
+        setDetections((prev) => {
+          const seen = new Set(prev.map((d) => d.id));
+          return [...prev, ...res.data.rows.filter((d) => !seen.has(d.id))];
+        });
+      })
+      .catch(() => view === viewId.current && setMoreFailed(true))
+      .finally(() => setLoadingMore(false));
+  };
+
+  const exportUrl = () => {
+    const params = new URLSearchParams({
+      ...range,
+      ...(behaviorParam && { behavior: behaviorParam }),
+      tz: new Date().getTimezoneOffset(),
+    });
+    return `${BACKEND_URL}/detections/export.csv?${params}`;
+  };
+
+  const emptyMessage =
+    loadState === "loading"
+      ? "Loading detections…"
+      : loadState === "error"
+        ? "Couldn't load detections from the backend"
+        : "No detections match these filters";
+
+  // Rows are newest first, so a day's rows are already together
+  const groups = [];
+  for (const d of detections) {
+    const day = dayKey(new Date(d.timestamp));
+    if (groups.at(-1)?.day !== day) groups.push({ day, rows: [] });
+    groups.at(-1).rows.push(d);
+  }
 
   const handleDelete = (id) => {
     setDeletingId(id);
@@ -103,73 +215,20 @@ export default function Detections() {
     api
       .delete(`/detections/${id}`)
       .then(() => {
-        removeDetection(id);
+        setDetections((prev) => prev.filter((d) => d.id !== id));
         setConfirmDeleteId(null);
       })
       .catch((err) =>
-        setDeleteError({
-          id,
-          message: err.response?.data?.error
-            ? `Not deleted: ${err.response.data.error}`
-            : "Not deleted: couldn't reach the backend.",
-        }),
+        setDeleteError({ id, message: apiErrorText(err, "deleted") }),
       )
       .finally(() => setDeletingId(null));
-  };
-
-  const openDemo = () => {
-    setDemoForm(newDemoForm());
-    setDemoError(null);
-    dialogRef.current.showModal();
-  };
-
-  const handleSnapshot = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    setDemoError(null);
-    try {
-      const snapshot = await resizeImage(file);
-      setDemoForm((f) => ({ ...f, snapshot }));
-    } catch {
-      e.target.value = "";
-      setDemoError("Couldn't read that image. Try a JPEG or PNG.");
-    }
-  };
-
-  const submitDemo = (e) => {
-    e.preventDefault();
-    const confidence = Number(demoForm.confidence);
-    if (!(confidence >= 0 && confidence <= 100))
-      return setDemoError("Confidence must be between 0 and 100.");
-    if (!demoForm.time) return setDemoError("Set a date and time.");
-    setDemoBusy(true);
-    setDemoError(null);
-    api
-      .post("/detect", {
-        source: "demo",
-        snapshot: demoForm.snapshot,
-        behavior: demoForm.behavior.toLowerCase(),
-        confidence: confidence / 100,
-        camera: demoForm.camera,
-        timestamp: new Date(demoForm.time).toISOString(),
-      })
-      .then((res) => {
-        addDetection(res.data.detection);
-        dialogRef.current.close();
-      })
-      .catch((err) =>
-        setDemoError(
-          err.response?.data?.error
-            ? `Not added: ${err.response.data.error}`
-            : "Not added: couldn't reach the backend.",
-        ),
-      )
-      .finally(() => setDemoBusy(false));
   };
 
   return (
     <div className="space-y-6">
       <h1 className="font-heading text-h4 text-grey-900">Detections</h1>
+
+      <DateRangeCalendar from={from} to={to} onChange={selectDates} refreshKey={version} />
 
       <div className="flex flex-wrap gap-2" role="group" aria-label="Filter by behavior">
         {behaviors.map((b) => (
@@ -182,32 +241,30 @@ export default function Detections() {
             onClick={() => setFilter(b)}
             className="h-11"
           >
-            {b} ({countOf(b)})
+            {b} ({counts[b] ?? 0})
           </Button>
         ))}
       </div>
 
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <p className="text-body-md font-medium text-grey-900" aria-live="polite">
+          Showing {formatDates(from, to)}
+          {loadState === "ready" ? `: ${plural(total)}` : "…"}
+        </p>
+        <Button
+          variant="grey"
+          appearance="outlined"
+          icon={<Download size={16} />}
+          iconPosition="leading"
+          className="h-11"
+          onClick={() => window.location.assign(exportUrl())}
+        >
+          Export CSV
+        </Button>
+      </div>
+
       <Card shadow="md">
-        <CardHeader
-          title="Detection log"
-          actions={
-            <div className="flex items-center gap-3">
-              <Badge color="neutral">{filtered.length} records</Badge>
-              <Button
-                variant="grey"
-                appearance="outlined"
-                size="sm"
-                iconPosition="icon-only"
-                icon={plusIcon}
-                aria-label="Add demo sample"
-                title="Add demo sample"
-                className="size-11"
-                onClick={openDemo}
-              />
-            </div>
-          }
-          bordered
-        />
+        <CardHeader title="Detection log" bordered />
         <div className="overflow-x-auto">
           <Table>
             <TableHeader>
@@ -223,14 +280,22 @@ export default function Detections() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filtered.length === 0 && (
+              {detections.length === 0 && (
                 <TableRow>
                   <TableCell colSpan={6} className="py-10 text-center text-grey-500">
-                    No detections yet — awaiting YOLO model deployment
+                    {emptyMessage}
                   </TableCell>
                 </TableRow>
               )}
-              {filtered.map((d, i) => (
+              {groups.map((group) => (
+                <Fragment key={group.day}>
+                  <TableRow>
+                    <TableCell colSpan={6} className="bg-grey-50 font-semibold text-grey-900">
+                      {parseDay(group.day).toLocaleDateString(undefined, { dateStyle: "medium" })} —{" "}
+                      {plural(dayCounts[group.day] ?? group.rows.length)}
+                    </TableCell>
+                  </TableRow>
+                  {group.rows.map((d, i) => (
                 <TableRow key={d.id ?? i}>
                   <TableCell>
                     {d.snapshot ? (
@@ -314,120 +379,33 @@ export default function Detections() {
                     )}
                   </TableCell>
                 </TableRow>
+                  ))}
+                </Fragment>
               ))}
             </TableBody>
           </Table>
         </div>
-      </Card>
-
-      <dialog
-        ref={dialogRef}
-        aria-labelledby="demo-title"
-        className="m-auto w-[min(92vw,520px)] rounded-lg p-0 bg-surface backdrop:bg-black/70"
-      >
-        <form onSubmit={submitDemo} className="p-6 space-y-5">
-          <div>
-            <h2 id="demo-title" className="font-heading text-h6 text-grey-900">
-              Add demo sample
-            </h2>
-            <p className="text-body-sm text-grey-600 mt-1">
-              Shown in the log with a "Demo sample" badge. Confidence is what you
-              enter here, not model output. Snapshot is optional. Not counted on the Dashboard.
-            </p>
-          </div>
-
-          <div>
-            <span className="block text-body-sm font-medium text-grey-700 mb-1.5">
-              Snapshot image
+        {moreFailed && (
+          <p className="px-4 pt-4 text-center text-body-sm text-error-600">Couldn't load more detections.</p>
+        )}
+        {detections.length < total && (
+          <div className="flex items-center justify-center gap-3 p-4">
+            <span className="text-body-sm text-grey-600">
+              Showing {detections.length} of {total}
             </span>
-            <input
-              ref={fileRef}
-              type="file"
-              accept="image/*"
-              className="sr-only"
-              tabIndex={-1}
-              aria-hidden="true"
-              onChange={handleSnapshot}
-            />
-            <div className="flex items-center gap-3">
-              {demoForm.snapshot && (
-                <img
-                  src={demoForm.snapshot}
-                  alt="Selected snapshot"
-                  className="w-28 aspect-video rounded-md object-cover border border-grey-200"
-                />
-              )}
-              <Button
-                type="button"
-                variant="grey"
-                appearance="outlined"
-                className="h-11"
-                onClick={() => fileRef.current.click()}
-              >
-                {demoForm.snapshot ? "Replace image" : "Choose image"}
-              </Button>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <Select
-              label="Behavior class"
-              value={demoForm.behavior}
-              onValueChange={(behavior) => setDemoForm({ ...demoForm, behavior })}
-            >
-              {DEMO_BEHAVIORS.map((b) => (
-                <SelectOption key={b} value={b}>
-                  {b}
-                </SelectOption>
-              ))}
-            </Select>
-            <Input
-              label="Confidence (%)"
-              type="number"
-              min="0"
-              max="100"
-              step="any"
-              inputMode="decimal"
-              value={demoForm.confidence}
-              onChange={(e) => setDemoForm({ ...demoForm, confidence: e.target.value })}
-            />
-            <Select
-              label="Camera"
-              value={demoForm.camera}
-              onValueChange={(camera) => setDemoForm({ ...demoForm, camera })}
-            >
-              {CAMERAS.map((c) => (
-                <SelectOption key={c} value={c}>
-                  {c}
-                </SelectOption>
-              ))}
-            </Select>
-            <Input
-              label="Date and time"
-              type="datetime-local"
-              value={demoForm.time}
-              onChange={(e) => setDemoForm({ ...demoForm, time: e.target.value })}
-            />
-          </div>
-
-          {demoError && <p className="text-body-sm text-error-600">{demoError}</p>}
-
-          <div className="flex gap-3">
-            <Button type="submit" variant="primary" disabled={demoBusy} className="h-11">
-              {demoBusy ? "Adding…" : "Add to log"}
-            </Button>
             <Button
-              type="button"
               variant="grey"
               appearance="outlined"
               className="h-11"
-              onClick={() => dialogRef.current.close()}
+              disabled={loadingMore}
+              onClick={loadMore}
             >
-              Cancel
+              {loadingMore ? "Loading…" : "Load more"}
             </Button>
           </div>
-        </form>
-      </dialog>
+        )}
+      </Card>
+
     </div>
   );
 }

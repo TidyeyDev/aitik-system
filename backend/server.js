@@ -4,7 +4,15 @@ const { Server } = require("socket.io");
 const cors = require("cors");
 const { MongoClient, ObjectId } = require("mongodb");
 const { createClient } = require("@supabase/supabase-js");
-const { initRecords, registerRecordRoutes } = require("./records");
+const {
+  initRecords,
+  closeRecords,
+  registerRecordRoutes,
+  parsePhoto,
+  sendPhoto,
+  offlineError,
+  storageError,
+} = require("./records");
 
 const app = express();
 const server = http.createServer(app);
@@ -20,14 +28,14 @@ app.use(express.json({ limit: "5mb" }));
 let detections = [];
 let tunnelUrl = null;
 
-// Egg weight records, oldest first.
+// Egg weight records, oldest first. Mirrors MongoDB, the only copy.
 let eggRecords = [];
-const eggPhotos = new Map();
 
 // Set by initStorage() when MONGODB_URI is configured and reachable
 let detectionsCol = null;
 let settingsCol = null;
 let eggRecordsCol = null;
+let mongoDb = null;
 
 // Set by initStorage() when SUPABASE_URL + SUPABASE_ANON_KEY are configured
 let supabase = null;
@@ -110,19 +118,21 @@ async function initStorage() {
       console.error("Supabase connection failed, using memory:", err.message);
     }
   }
+}
 
-  // ── MongoDB (egg records, settings, mating events) ────────────────────────
+const MONGO_RETRY_MS = 10000;
+
+// MongoDB (egg records, settings, behavior events). Retries until it connects;
+// the driver handles reconnecting after that.
+async function connectMongo() {
   const uri = process.env.MONGODB_URI;
   if (!uri) {
-    if (!supabase) {
-      console.warn(
-        "Neither SUPABASE_URL nor MONGODB_URI set: all data is kept in memory only",
-      );
-    }
+    console.error("MONGODB_URI not set: egg records and behavior events are offline");
     return;
   }
+  let client;
   try {
-    const client = new MongoClient(uri, { serverSelectionTimeoutMS: 10000 });
+    client = new MongoClient(uri, { serverSelectionTimeoutMS: 10000 });
     await client.connect();
     const db = client.db(process.env.MONGODB_DB || "aitik");
 
@@ -145,31 +155,36 @@ async function initStorage() {
     }
 
     settingsCol = db.collection("settings");
-    eggRecordsCol = db.collection("eggRecords");
-    await eggRecordsCol.createIndex({ date: 1, createdAt: 1 });
+    const eggsCol = db.collection("eggRecords");
+    await eggsCol.createIndex({ date: 1, createdAt: 1 });
 
-    const eggDocs = await eggRecordsCol
+    const eggDocs = await eggsCol
       .find({}, { projection: { photo: 0 } })
       .sort({ date: 1, createdAt: 1 })
       .toArray();
     eggRecords = eggDocs.map(toEggRecord);
 
+    // A URL the Pi posted while we were still connecting is newer than the saved one
     const saved = await settingsCol.findOne({ _id: "tunnelUrl" });
-    if (saved) tunnelUrl = saved.value;
+    if (saved && !tunnelUrl) tunnelUrl = saved.value;
 
-    const records = await initRecords(db);
+    const records = await initRecords(db, supabase);
 
+    eggRecordsCol = eggsCol;
+    mongoDb = db;
     if (supabase) systemStatus.storage = "supabase+mongodb";
     console.log(
-      `MongoDB connected: ${eggRecords.length} egg records, ${records.events} mating events`,
+      `MongoDB connected: ${eggRecords.length} egg records, ${records.events} behavior events`,
     );
   } catch (err) {
-    if (!supabase) {
-      detectionsCol = null;
-    }
+    if (!supabase) detectionsCol = null;
     settingsCol = null;
     eggRecordsCol = null;
-    console.error("MongoDB connection failed:", err.message);
+    mongoDb = null;
+    closeRecords();
+    if (client) client.close().catch(() => {});
+    console.error(`MongoDB connection failed, retrying in ${MONGO_RETRY_MS / 1000}s:`, err.message);
+    setTimeout(connectMongo, MONGO_RETRY_MS);
   }
 }
 
@@ -215,6 +230,206 @@ app.get("/detections", async (req, res) => {
   res.json(detections);
 });
 
+const DETECTION_BEHAVIORS = ["Mating", "Receptive", "Neutral", "Non-receptive"];
+
+// Query params shared by the history page and the CSV export. `to` is exclusive.
+function detectionRange(query) {
+  return { from: toTimestamp(query.from), to: toTimestamp(query.to) };
+}
+
+function supabaseDetections(columns, options, { from, to, behavior }) {
+  let q = supabase.from("detections").select(columns, options);
+  if (from) q = q.gte("created_at", from);
+  if (to) q = q.lt("created_at", to);
+  if (behavior) q = q.ilike("behavior", behavior);
+  return q;
+}
+
+// Newest first, without Supabase.
+// ponytail: filters in JS, push into the query if Supabase is ever dropped for good
+async function localDetections({ from, to, behavior }) {
+  const all = detectionsCol
+    ? (await detectionsCol.find().sort({ timestamp: -1 }).toArray()).map(toDetection)
+    : detections;
+  return all.filter((d) => {
+    const time = new Date(d.timestamp).toISOString();
+    return (
+      (!from || time >= from) &&
+      (!to || time < to) &&
+      (!behavior || String(d.behavior).toLowerCase() === behavior.toLowerCase())
+    );
+  });
+}
+
+async function detectionCounts(range) {
+  const counts = {};
+  await Promise.all(
+    [null, ...DETECTION_BEHAVIORS].map(async (behavior) => {
+      const filter = { ...range, behavior };
+      let count;
+      if (supabase) {
+        const result = await supabaseDetections("id", { count: "exact", head: true }, filter);
+        if (result.error) throw result.error;
+        count = result.count;
+      } else {
+        count = (await localDetections(filter)).length;
+      }
+      counts[behavior ?? "All"] = count;
+    }),
+  );
+  return counts;
+}
+
+function detectionBehavior(query) {
+  return DETECTION_BEHAVIORS.includes(query.behavior) ? query.behavior : null;
+}
+
+// Detections per calendar day in the viewer's timezone: { "2026-10-29": 42, ... }
+app.get("/detections/daily-counts", async (req, res) => {
+  const tz = typeof req.query.tz === "string" ? req.query.tz : "UTC";
+  const range = detectionRange(req.query);
+  const behavior = detectionBehavior(req.query);
+  try {
+    new Intl.DateTimeFormat("en-CA", { timeZone: tz });
+  } catch {
+    return res.status(400).json({ error: "invalid timezone" });
+  }
+  try {
+    if (supabase) {
+      const { data, error } = await supabase.rpc("detection_daily_counts", {
+        p_tz: tz,
+        p_from: range.from,
+        p_to: range.to,
+        p_behavior: behavior,
+      });
+      if (error) throw error;
+      return res.json(data);
+    }
+    const days = {};
+    const format = new Intl.DateTimeFormat("en-CA", { timeZone: tz });
+    for (const d of await localDetections({ ...range, behavior })) {
+      const day = format.format(new Date(d.timestamp));
+      days[day] = (days[day] ?? 0) + 1;
+    }
+    res.json(days);
+  } catch (err) {
+    console.error("Failed to count detections per day:", err.message);
+    res.status(500).json({ error: "storage failed" });
+  }
+});
+
+// One page of history for any period; counts come with the first page.
+app.get("/detections/page", async (req, res) => {
+  const range = detectionRange(req.query);
+  const behavior = detectionBehavior(req.query);
+  const offset = Math.max(0, parseInt(req.query.offset, 10) || 0);
+  const limit = Math.min(1000, Math.max(1, parseInt(req.query.limit, 10) || 100));
+  try {
+    let rows, total;
+    if (supabase) {
+      const { data, error, count } = await supabaseDetections("*", { count: "exact" }, { ...range, behavior })
+        .order("created_at", { ascending: false })
+        .order("id", { ascending: false })
+        .range(offset, offset + limit - 1);
+      if (error) throw error;
+      rows = data.map(rowToDetection);
+      total = count;
+    } else {
+      const all = await localDetections({ ...range, behavior });
+      rows = all.slice(offset, offset + limit);
+      total = all.length;
+    }
+    res.json({ rows, total, counts: offset === 0 ? await detectionCounts(range) : null });
+  } catch (err) {
+    console.error("Failed to load detections:", err.message);
+    res.status(500).json({ error: "storage failed" });
+  }
+});
+
+// Oldest first, so rows arriving during an export can't shift the pages
+async function* allDetections(range) {
+  if (!supabase) {
+    yield* (await localDetections(range)).reverse();
+    return;
+  }
+  const BATCH = 1000;
+  for (let offset = 0; ; offset += BATCH) {
+    const { data, error } = await supabaseDetections("*", {}, range)
+      .order("created_at", { ascending: true })
+      .order("id", { ascending: true })
+      .range(offset, offset + BATCH - 1);
+    if (error) throw error;
+    yield* data.map(rowToDetection);
+    if (data.length < BATCH) return;
+  }
+}
+
+// Leading =, +, - or @ would run as a formula when the file is opened in a spreadsheet
+function csvCell(value) {
+  const text = String(value ?? "");
+  const safe = /^[=+\-@\t\r]/.test(text) ? `'${text}` : text;
+  return /[",\r\n]/.test(safe) ? `"${safe.replace(/"/g, '""')}"` : safe;
+}
+
+// Pi snapshots are named by their file; photos stored inline by the detection id
+function snapshotId(d) {
+  if (!d.snapshot) return "";
+  return d.snapshot.startsWith("data:") ? `inline-${d.id}` : d.snapshot.split("/").pop();
+}
+
+// tz = the viewer's getTimezoneOffset(), so dates match what the page shows
+app.get("/detections/export.csv", async (req, res) => {
+  const tz = parseInt(req.query.tz, 10) || 0;
+  const start = () => {
+    if (res.headersSent) return;
+    res.set({
+      "Content-Type": "text/csv; charset=utf-8",
+      "Content-Disposition": 'attachment; filename="detections.csv"',
+    });
+    res.write("date,time,behavior,confidence,camera,snapshot_id\r\n");
+  };
+  try {
+    const filter = { ...detectionRange(req.query), behavior: detectionBehavior(req.query) };
+    for await (const d of allDetections(filter)) {
+      start();
+      const local = new Date(new Date(d.timestamp).getTime() - tz * 60000).toISOString();
+      const cells = [local.slice(0, 10), local.slice(11, 19), d.behavior, d.confidence, d.camera, snapshotId(d)];
+      res.write(cells.map(csvCell).join(",") + "\r\n");
+    }
+    start();
+    res.end();
+  } catch (err) {
+    console.error("Failed to export detections:", err.message);
+    // Mid-download: abort, so a cut-off file can't pass as complete
+    if (res.headersSent) res.destroy();
+    else res.status(500).json({ error: "storage failed" });
+  }
+});
+
+function within3s(promise) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), 3000)),
+  ]);
+}
+
+app.get("/health", async (req, res) => {
+  const [mongo, sb] = await Promise.allSettled([
+    mongoDb ? within3s(mongoDb.command({ ping: 1 })) : Promise.reject(new Error("not connected")),
+    supabase
+      ? within3s(
+          supabase.from("detections").select("id", { head: true }).limit(1).then(({ error }) => {
+            if (error) throw error;
+          }),
+        )
+      : Promise.reject(new Error("not connected")),
+  ]);
+  res.json({
+    mongo: mongo.status === "fulfilled" ? "connected" : "disconnected",
+    supabase: sb.status === "fulfilled" ? "ok" : "error",
+  });
+});
+
 app.get("/status", async (req, res) => res.json(await getSystemStatus()));
 
 app.get("/tunnel-url", (req, res) => res.json({ url: tunnelUrl }));
@@ -238,23 +453,11 @@ app.post("/tunnel-url", async (req, res) => {
   res.json({ success: true });
 });
 
-const DEMO_BEHAVIORS = ["mating", "receptive", "non-receptive"];
-
 app.post("/detect", async (req, res) => {
   const { snapshot } = req.body;
-  // "recorded" = model output on a pre-recorded clip (tools/run_clip.py);
-  // "demo" = sample entered by hand on the Detections page, confidence set manually.
-  // Neither is a live camera.
-  const source = ["recorded", "demo"].includes(req.body.source) ? req.body.source : "live";
+  // "recorded" = model output on a pre-recorded clip (tools/run_clip.py), not a live camera.
+  const source = req.body.source === "recorded" ? "recorded" : "live";
   const recorded = source !== "live";
-  const demo = source === "demo";
-  if (demo) {
-    const c = req.body.confidence;
-    if (!DEMO_BEHAVIORS.includes(String(req.body.behavior).toLowerCase()))
-      return res.status(400).json({ success: false, error: "invalid demo behavior" });
-    if (typeof c !== "number" || !(c >= 0 && c <= 1))
-      return res.status(400).json({ success: false, error: "confidence must be 0–1" });
-  }
   const doc = {
     snapshot: typeof snapshot === "string" && snapshot ? snapshot : null,
     behavior: req.body.behavior,
@@ -266,7 +469,7 @@ app.post("/detect", async (req, res) => {
     frame: toFrame(req.body.frame),
     frameId: toFrameId(req.body.frameId),
     capturedAt: toTimestamp(req.body.capturedAt),
-    timestamp: (demo && toTimestamp(req.body.timestamp)) || new Date().toISOString(),
+    timestamp: new Date().toISOString(),
   };
 
   let detection;
@@ -283,7 +486,6 @@ app.post("/detect", async (req, res) => {
           bbox: doc.bbox,
           // Only sent for recorded clips, so live inserts never depend on these columns
           ...(recorded && { source: doc.source, clip: doc.clip }),
-          ...(demo && { created_at: doc.timestamp }),
         })
         .select()
         .single();
@@ -409,6 +611,11 @@ app.get("/frame-boxes/:camId", (req, res) => {
   );
 });
 
+// Egg records live only in MongoDB: no connection, no save
+app.use("/eggs", (req, res, next) =>
+  eggRecordsCol ? next() : offlineError(res, req.method),
+);
+
 app.get("/eggs", (req, res) => res.json(eggRecords));
 
 // Validates an egg record body; returns { error } or { fields }
@@ -429,21 +636,6 @@ function parseEggBody(body) {
   };
 }
 
-// Raster types only: an SVG served from this origin could run script
-const PHOTO_DATA_URL = /^data:(image\/(?:jpeg|png|webp|gif));base64,([A-Za-z0-9+/=]+)$/;
-const MAX_PHOTO_BYTES = 2 * 1024 * 1024;
-
-// Optional photo field: undefined = leave as is, null = remove, string = new photo
-function parsePhoto(body) {
-  const { photo } = body;
-  if (photo === undefined || photo === null) return { photo };
-  const match = typeof photo === "string" && PHOTO_DATA_URL.exec(photo);
-  if (!match) return { error: "photo must be a JPEG, PNG, WebP or GIF data URL" };
-  if (Buffer.byteLength(match[2], "base64") > MAX_PHOTO_BYTES)
-    return { error: "photo must be 2 MB or smaller" };
-  return { photo };
-}
-
 app.post("/eggs", async (req, res) => {
   const { error, fields } = parseEggBody(req.body);
   if (error) return res.status(400).json({ error });
@@ -455,17 +647,11 @@ app.post("/eggs", async (req, res) => {
   if (photo) Object.assign(doc, { photo, photoUpdatedAt: now });
 
   let record;
-  if (eggRecordsCol) {
-    try {
-      const { insertedId } = await eggRecordsCol.insertOne(doc);
-      record = toEggRecord({ _id: insertedId, ...doc });
-    } catch (err) {
-      console.error("Failed to save egg record:", err.message);
-      return res.status(500).json({ error: "storage failed" });
-    }
-  } else {
-    record = toEggRecord({ _id: String(Date.now()), ...doc });
-    if (photo) eggPhotos.set(record.id, photo);
+  try {
+    const { insertedId } = await eggRecordsCol.insertOne(doc);
+    record = toEggRecord({ _id: insertedId, ...doc });
+  } catch (err) {
+    return storageError(req, res, err, "save egg record");
   }
 
   eggRecords.push(record);
@@ -483,25 +669,20 @@ app.put("/eggs/:id", async (req, res) => {
   const index = eggRecords.findIndex((r) => r.id === id);
   const photoUpdatedAt = photo ? new Date().toISOString() : undefined;
 
-  if (eggRecordsCol) {
-    if (!ObjectId.isValid(id))
-      return res.status(404).json({ error: "record not found" });
-    const update = { $set: { ...fields } };
-    if (photo) Object.assign(update.$set, { photo, photoUpdatedAt });
-    if (photo === null) update.$unset = { photo: "", photoUpdatedAt: "" };
-    try {
-      const { matchedCount } = await eggRecordsCol.updateOne(
-        { _id: new ObjectId(id) },
-        update,
-      );
-      if (matchedCount === 0)
-        return res.status(404).json({ error: "record not found" });
-    } catch (err) {
-      console.error("Failed to update egg record:", err.message);
-      return res.status(500).json({ error: "storage failed" });
-    }
-  } else if (index === -1) {
+  if (!ObjectId.isValid(id))
     return res.status(404).json({ error: "record not found" });
+  const update = { $set: { ...fields } };
+  if (photo) Object.assign(update.$set, { photo, photoUpdatedAt });
+  if (photo === null) update.$unset = { photo: "", photoUpdatedAt: "" };
+  try {
+    const { matchedCount } = await eggRecordsCol.updateOne(
+      { _id: new ObjectId(id) },
+      update,
+    );
+    if (matchedCount === 0)
+      return res.status(404).json({ error: "record not found" });
+  } catch (err) {
+    return storageError(req, res, err, "update egg record");
   }
 
   const record = { ...(eggRecords[index] ?? { id }), ...fields };
@@ -509,10 +690,6 @@ app.put("/eggs/:id", async (req, res) => {
     if (photo) record.photoUpdatedAt = photoUpdatedAt;
     else delete record.photoUpdatedAt;
     record.hasPhoto = Boolean(photo);
-    if (eggRecordsCol) {
-      // MongoDB holds the photo
-    } else if (photo) eggPhotos.set(id, photo);
-    else eggPhotos.delete(id);
   }
   if (index !== -1) eggRecords[index] = record;
   else eggRecords.push(record);
@@ -559,53 +736,34 @@ app.delete("/eggs/:id", async (req, res) => {
   const { id } = req.params;
   const index = eggRecords.findIndex((r) => r.id === id);
 
-  if (eggRecordsCol) {
-    if (!ObjectId.isValid(id))
-      return res.status(404).json({ error: "record not found" });
-    try {
-      const { deletedCount } = await eggRecordsCol.deleteOne({
-        _id: new ObjectId(id),
-      });
-      if (deletedCount === 0)
-        return res.status(404).json({ error: "record not found" });
-    } catch (err) {
-      console.error("Failed to delete egg record:", err.message);
-      return res.status(500).json({ error: "storage failed" });
-    }
-  } else if (index === -1) {
+  if (!ObjectId.isValid(id))
     return res.status(404).json({ error: "record not found" });
+  try {
+    const { deletedCount } = await eggRecordsCol.deleteOne({
+      _id: new ObjectId(id),
+    });
+    if (deletedCount === 0)
+      return res.status(404).json({ error: "record not found" });
+  } catch (err) {
+    return storageError(req, res, err, "delete egg record");
   }
 
   if (index !== -1) eggRecords.splice(index, 1);
-  eggPhotos.delete(id);
   res.json({ success: true });
 });
 
 app.get("/eggs/:id/photo", async (req, res) => {
   const { id } = req.params;
-  let photo = eggPhotos.get(id);
-  if (eggRecordsCol) {
-    if (!ObjectId.isValid(id)) return res.status(404).json({ error: "photo not found" });
-    try {
-      const doc = await eggRecordsCol.findOne(
-        { _id: new ObjectId(id) },
-        { projection: { photo: 1 } },
-      );
-      photo = doc?.photo;
-    } catch (err) {
-      console.error("Failed to load egg photo:", err.message);
-      return res.status(500).json({ error: "storage failed" });
-    }
+  if (!ObjectId.isValid(id)) return res.status(404).json({ error: "photo not found" });
+  try {
+    const doc = await eggRecordsCol.findOne(
+      { _id: new ObjectId(id) },
+      { projection: { photo: 1 } },
+    );
+    sendPhoto(res, doc?.photo);
+  } catch (err) {
+    storageError(req, res, err, "load egg photo");
   }
-  const match = photo && PHOTO_DATA_URL.exec(photo);
-  if (!match) return res.status(404).json({ error: "photo not found" });
-
-  res.set({
-    "Content-Type": match[1],
-    "Cache-Control": "public, max-age=31536000, immutable",
-    "X-Content-Type-Options": "nosniff",
-  });
-  res.send(Buffer.from(match[2], "base64"));
 });
 
 registerRecordRoutes(app);
@@ -625,4 +783,5 @@ initStorage().then(() => {
   server.listen(PORT, () =>
     console.log(`AI-TIK Backend running on port ${PORT}`),
   );
+  connectMongo();
 });

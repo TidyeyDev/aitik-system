@@ -14,7 +14,8 @@ import Dashboard from "./pages/Dashboard";
 import LiveMonitor from "./pages/LiveMonitor";
 import Detections from "./pages/Detections";
 import EggQuality from "./pages/EggQuality";
-import MatingEvents from "./pages/MatingEvents";
+import BehaviorHistory from "./pages/BehaviorHistory";
+import OfflineBanner from "./components/OfflineBanner";
 import AboutUs from "./pages/AboutUs";
 
 function ProtectedLayout() {
@@ -28,6 +29,7 @@ function ProtectedLayout() {
       <Navbar />
       <main className="flex-1 min-w-0 px-4 pt-4 sm:px-6 sm:pt-6 pb-[calc(6rem+env(safe-area-inset-bottom))] lg:pb-6">
         <div className="max-w-7xl mx-auto">
+          <OfflineBanner />
           <Outlet />
         </div>
       </main>
@@ -46,7 +48,8 @@ export default function App() {
               <Route path="/" element={<Dashboard />} />
               <Route path="/monitor" element={<LiveMonitor />} />
               <Route path="/detections" element={<Detections />} />
-              <Route path="/mating" element={<MatingEvents />} />
+              <Route path="/behavior" element={<BehaviorHistory />} />
+              <Route path="/mating" element={<Navigate to="/behavior" replace />} />
               <Route path="/eggs" element={<EggQuality />} />
               <Route path="/about" element={<AboutUs />} />
             </Route>

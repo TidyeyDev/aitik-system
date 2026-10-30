@@ -18,7 +18,7 @@ import {
   TableRow,
 } from "@raydenui/ui";
 import { plusIcon } from "@raydenui/ui/icons";
-import { api, BACKEND_URL } from "../api/client";
+import { api, apiErrorText, BACKEND_URL } from "../api/client";
 import { BEHAVIOR_HEX, behaviorBadgeColor } from "../behavior";
 import { resizeImage } from "../utils/resizeImage";
 
@@ -108,13 +108,7 @@ export default function EggQuality() {
         );
         closeForm();
       })
-      .catch((err) =>
-        setSaveError(
-          err.response?.data?.error
-            ? `Not saved: ${err.response.data.error}`
-            : "Not saved: couldn't reach the backend.",
-        ),
-      )
+      .catch((err) => setSaveError(apiErrorText(err, "saved")))
       .finally(() => setSaving(false));
   };
 
@@ -164,12 +158,7 @@ export default function EggQuality() {
         setConfirmDeleteId(null);
       })
       .catch((err) =>
-        setDeleteError({
-          id,
-          message: err.response?.data?.error
-            ? `Not deleted: ${err.response.data.error}`
-            : "Not deleted: couldn't reach the backend.",
-        }),
+        setDeleteError({ id, message: apiErrorText(err, "deleted") }),
       )
       .finally(() => setDeletingId(null));
   };

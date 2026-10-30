@@ -20,4 +20,11 @@ export const getTunnelUrl = async () => {
   }
 };
 
+// action: "saved", "deleted". A 503 already says what happened ("Not saved — database offline").
+export const apiErrorText = (err, action) => {
+  const message = err.response?.data?.error;
+  if (!message) return `Not ${action}: couldn't reach the backend.`;
+  return err.response.status === 503 ? message : `Not ${action}: ${message}`;
+};
+
 export default api;
